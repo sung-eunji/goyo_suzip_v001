@@ -1,89 +1,170 @@
--- 고요수집 / Collecting Stillness — Supabase 스키마
--- Supabase 대시보드 → SQL Editor 에 붙여넣고 Run 하세요.
--- (익명 로그인은 Authentication → Providers → "Anonymous sign-ins" 에서 켜야 합니다.)
+-- 고요수집 / Collecting Stillness - normalized analytics schema v2
+-- 새 프로젝트 또는 기존 테스트 DB를 초기화한 뒤 Supabase SQL Editor에서 실행하세요.
 
--- ─────────────────────────────────────────────
--- 1) 테이블
--- ─────────────────────────────────────────────
+create extension if not exists pgcrypto;
 
--- 참가자 프로필 (auth.users 1:1)
+do $$ begin
+  create type public.sensation_category as enum ('tight', 'flow', 'release');
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create type public.app_role as enum ('member', 'admin');
+exception when duplicate_object then null; end $$;
+
 create table if not exists public.profiles (
-  id          uuid primary key references auth.users(id) on delete cascade,
-  nickname    text not null default '고요님',
-  is_admin    boolean not null default false,   -- Gee(관리자)만 true
-  subscribed  boolean not null default false,   -- 유료 구독 여부 (결제 연동 전엔 수동/관리자 설정)
-  created_at  timestamptz not null default now()
+  id uuid primary key references auth.users(id) on delete cascade,
+  nickname text not null default '고요님',
+  nickname_key text not null unique,
+  timezone text not null default 'Asia/Seoul',
+  locale text not null default 'ko',
+  role public.app_role not null default 'member',
+  subscribed boolean not null default false,
+  subscribed_until date,
+  cohort text,
+  is_anonymous boolean not null default true,
+  converted_at timestamptz,
+  research_consent boolean not null default false,
+  research_consent_at timestamptz,
+  analysis_id uuid not null default gen_random_uuid(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
--- 이 달의 고요 약속 + 물때 예보 (사용자당 1행)
 create table if not exists public.settings (
-  user_id   uuid primary key references public.profiles(id) on delete cascade,
-  promises  jsonb not null default '[]'::jsonb,   -- ["약속1","약속2",...]  (최대 3)
-  forecast  jsonb not null default '{}'::jsonb    -- {"2026-09-11": 3, ...}  강도 0~4
+  user_id uuid primary key references public.profiles(id) on delete cascade,
+  theme text not null default 'light',
+  reminder_at time,
+  prefs jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
 );
 
--- 하루 기록 (사용자 × 날짜)
+create table if not exists public.vessel_types (
+  key text primary key, label_ko text not null, label_en text,
+  sort_order int not null default 0, is_active boolean not null default true
+);
+create table if not exists public.sensation_options (
+  key text primary key, category public.sensation_category not null,
+  label_ko text not null, label_en text, sort_order int not null default 0,
+  is_active boolean not null default true
+);
+create table if not exists public.body_response_options (
+  key text primary key, label_ko text not null, label_en text,
+  is_relief boolean not null default true, sort_order int not null default 0,
+  is_active boolean not null default true
+);
+
+create table if not exists public.promises (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  month date not null, text_raw text not null,
+  vessel_key text references public.vessel_types(key), target_minutes smallint,
+  position smallint not null default 1, is_active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+create index if not exists promises_user_month_idx on public.promises(user_id, month);
+
+create table if not exists public.forecasts (
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  date date not null, level smallint not null check (level between 0 and 4),
+  created_at timestamptz not null default now(), primary key (user_id, date)
+);
+
 create table if not exists public.entries (
-  user_id     uuid not null references public.profiles(id) on delete cascade,
-  date        text not null,                        -- 'YYYY-MM-DD'
-  surge       int  not null default 0,              -- 몰아침 게이지 0~100
-  kept        jsonb not null default '[]'::jsonb,    -- 들인 고요: 약속 인덱스 배열
-  met         jsonb,                                 -- 찾아온 고요: {moment, min, feel:[]} 또는 null
-  body        jsonb not null default '[]'::jsonb,    -- 몸 감각 태그 배열
-  none        boolean not null default false,        -- "고요가 없었어요"
-  updated_at  timestamptz not null default now(),
-  primary key (user_id, date)
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  local_date date not null, tz text, surge smallint check (surge between 0 and 100),
+  no_stillness boolean not null default false, day_note text, app_version text,
+  created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
+  unique (user_id, local_date)
+);
+create index if not exists entries_user_date_idx on public.entries(user_id, local_date desc);
+
+create table if not exists public.entry_promise_checks (
+  entry_id uuid not null references public.entries(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  promise_id uuid not null references public.promises(id) on delete cascade,
+  done boolean not null default true, minutes smallint,
+  primary key (entry_id, promise_id)
+);
+create table if not exists public.entry_sensations (
+  id uuid primary key default gen_random_uuid(),
+  entry_id uuid not null references public.entries(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  category public.sensation_category not null, option_key text references public.sensation_options(key),
+  text_raw text, check (option_key is not null or nullif(btrim(text_raw), '') is not null)
+);
+create unique index if not exists entry_sensations_uniq on public.entry_sensations(entry_id, option_key) where option_key is not null;
+
+create table if not exists public.encounters (
+  id uuid primary key default gen_random_uuid(),
+  entry_id uuid not null references public.entries(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  text_raw text not null, minutes smallint, vessel_key text references public.vessel_types(key),
+  position smallint not null default 1, created_at timestamptz not null default now()
+);
+create table if not exists public.encounter_responses (
+  encounter_id uuid not null references public.encounters(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  response_key text not null references public.body_response_options(key),
+  primary key (encounter_id, response_key)
+);
+create table if not exists public.weekly_reviews (
+  id uuid primary key default gen_random_uuid(), user_id uuid not null references public.profiles(id) on delete cascade,
+  week_start date not null, note text, share_with_group boolean not null default false,
+  created_at timestamptz not null default now(), unique(user_id, week_start)
+);
+create table if not exists public.survey_responses (
+  id uuid primary key default gen_random_uuid(), user_id uuid not null references public.profiles(id) on delete cascade,
+  survey_key text not null, answers jsonb not null, created_at timestamptz not null default now()
+);
+create unique index if not exists survey_responses_user_key_idx on public.survey_responses(user_id, survey_key);
+create table if not exists public.events (
+  id bigserial primary key, user_id uuid not null references public.profiles(id) on delete cascade,
+  name text not null, props jsonb not null default '{}'::jsonb, occurred_at timestamptz not null default now()
 );
 
--- ─────────────────────────────────────────────
--- 2) 관리자 판별 함수 (RLS에서 재귀 없이 쓰기 위해 security definer)
--- ─────────────────────────────────────────────
-create or replace function public.is_admin()
-returns boolean
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select coalesce((select is_admin from public.profiles where id = auth.uid()), false);
+create or replace function public.is_admin() returns boolean
+language sql stable security definer set search_path = public as $$
+  select coalesce((select role = 'admin' from public.profiles where id = auth.uid()), false);
 $$;
 
--- ─────────────────────────────────────────────
--- 3) RLS (Row Level Security)
--- ─────────────────────────────────────────────
 alter table public.profiles enable row level security;
-alter table public.settings enable row level security;
-alter table public.entries  enable row level security;
+drop policy if exists profiles_self on public.profiles;
+create policy profiles_self on public.profiles for all using (id = auth.uid() or public.is_admin()) with check (id = auth.uid());
 
--- profiles: 본인 것 CRUD, 관리자는 전체 열람
-drop policy if exists profiles_select on public.profiles;
-create policy profiles_select on public.profiles for select
-  using (auth.uid() = id or public.is_admin());
-drop policy if exists profiles_insert on public.profiles;
-create policy profiles_insert on public.profiles for insert
-  with check (auth.uid() = id);
-drop policy if exists profiles_update on public.profiles;
-create policy profiles_update on public.profiles for update
-  using (auth.uid() = id)
-  with check (auth.uid() = id);
--- 참고: is_admin / subscribed 는 참가자가 스스로 바꾸지 못하게 하려면
---       별도 컬럼 권한(REVOKE) 또는 트리거로 잠그는 것을 권장. 파일럿에선 관리자가 SQL로 설정.
+do $$ declare t text; begin
+  foreach t in array array['settings','entries','entry_promise_checks','entry_sensations','encounters','encounter_responses','promises','forecasts','weekly_reviews','survey_responses','events'] loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('drop policy if exists own_all on public.%I', t);
+    execute format('create policy own_all on public.%I for all using (user_id = auth.uid() or public.is_admin()) with check (user_id = auth.uid())', t);
+  end loop;
+end $$;
 
--- settings: 본인 것만, 관리자는 열람
-drop policy if exists settings_all on public.settings;
-create policy settings_all on public.settings for all
-  using (auth.uid() = user_id or public.is_admin())
-  with check (auth.uid() = user_id);
+do $$ declare t text; begin
+  foreach t in array array['vessel_types','sensation_options','body_response_options'] loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('drop policy if exists read_all on public.%I', t);
+    execute format('create policy read_all on public.%I for select to authenticated using (true)', t);
+    execute format('drop policy if exists admin_write on public.%I', t);
+    execute format('create policy admin_write on public.%I for all using (public.is_admin()) with check (public.is_admin())', t);
+  end loop;
+end $$;
 
--- entries: 본인 것만, 관리자는 열람
-drop policy if exists entries_all on public.entries;
-create policy entries_all on public.entries for all
-  using (auth.uid() = user_id or public.is_admin())
-  with check (auth.uid() = user_id);
+insert into public.vessel_types(key,label_ko,sort_order) values
+ ('walk','걷기',10),('read','독서',20),('chores','설거지·집안일',30),('breath','명상·호흡',40),
+ ('yoga','스트레칭·요가',50),('bath','목욕·샤워',60),('music','음악',70),('blank','멍때리기',80),
+ ('outside','자연·바깥',90),('cook','요리',100),('write','쓰기·그리기',110),('other','기타',999)
+on conflict (key) do nothing;
+insert into public.body_response_options(key,label_ko,sort_order) values
+ ('deep_breath','숨이 깊어졌다',10),('shoulder_down','어깨가 내려갔다',20),('warm_belly','배가 따뜻해졌다',30),
+ ('wide_view','시야가 넓어졌다',40),('slow_thought','생각이 느려졌다',50),('no_change','별 변화 없었다',60)
+on conflict (key) do nothing;
 
--- ─────────────────────────────────────────────
--- 4) 관리자 지정 (Gee 계정)
---    앱에서 한 번 로그인/시작해 프로필이 생긴 뒤, 아래로 본인을 관리자로:
---    select id, nickname from public.profiles order by created_at;   -- 내 id 확인
---    update public.profiles set is_admin = true, subscribed = true where id = '여기에-내-uuid';
--- ─────────────────────────────────────────────
+create or replace view public.v_day with (security_invoker = on) as
+select e.id, e.user_id, e.local_date, e.surge, e.no_stillness,
+  (select count(*) from public.entry_promise_checks c where c.entry_id = e.id and c.done) as kept_count,
+  (select count(*) from public.encounters n where n.entry_id = e.id) as encounter_count,
+  (select coalesce(sum(n.minutes), 0) from public.encounters n where n.entry_id = e.id) as encounter_minutes,
+  (select count(*) from public.entry_sensations s where s.entry_id = e.id and s.category = 'tight') as tight_count,
+  (select count(*) from public.entry_sensations s where s.entry_id = e.id and s.category = 'release') as release_count
+from public.entries e;
