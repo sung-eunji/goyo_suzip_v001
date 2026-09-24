@@ -73,6 +73,12 @@ export default function AppShell({
           로그아웃
         </button>
         <p className="dailymsg serif">{msg}</p>
+        {isAnon && (
+          <p className="authnote device-note">
+            이 브라우저의 익명 기록이에요. 다른 기기에서도 이어보려면 이메일을
+            연결해주세요.
+          </p>
+        )}
       </div>
 
       <nav className="tabs" role="tablist">

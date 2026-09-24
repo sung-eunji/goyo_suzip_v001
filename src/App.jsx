@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { isConfigured } from './supabaseClient'
 import * as store from './lib/store'
-import { demoSeed } from './lib/data'
+import { demoSeed, scoreFromEvents } from './lib/data'
 import Auth from './components/Auth'
 import AppShell from './components/AppShell'
 
@@ -47,7 +47,7 @@ function Setup() {
 export default function App() {
   const [phase, setPhase] = useState('loading') // loading | setup | auth | app
   const [profile, setProfile] = useState(null)
-  const [journal, setJournal] = useState({ promises: [], forecast: {}, entries: {} })
+  const [journal, setJournal] = useState({ promises: [], forecast: {}, forecastEvents: {}, eventTypes: [], entries: {} })
   const journalRef = useRef(journal)
   useEffect(() => { journalRef.current = journal }, [journal])
 
@@ -87,22 +87,28 @@ export default function App() {
 
   const setPromises = useCallback(async (promises) => {
     setJournal((j) => ({ ...j, promises }))
-    if (profile) await store.saveSettings(profile.id, promises, journalRef.current.forecast)
+    if (profile) await store.saveSettings(profile.id, promises, journalRef.current.forecastEvents)
   }, [profile])
 
-  const setForecast = useCallback(async (forecast) => {
-    setJournal((j) => ({ ...j, forecast }))
-    if (profile) await store.saveSettings(profile.id, journalRef.current.promises, forecast)
+  const setForecastEvents = useCallback(async (forecastEvents) => {
+    const score = Object.fromEntries(
+      Object.entries(forecastEvents).map(([date, types]) => [
+        date,
+        scoreFromEvents(types, journalRef.current.eventTypes),
+      ]),
+    )
+    setJournal((j) => ({ ...j, forecastEvents, forecast: score }))
+    if (profile) await store.saveSettings(profile.id, journalRef.current.promises, forecastEvents)
   }, [profile])
 
   const fillDemo = useCallback(async () => {
     const S = demoSeed()
-    setJournal(S)
+    setJournal((j) => ({ ...S, eventTypes: j.eventTypes }))
     if (profile) await store.saveWholeJournal(profile.id, S)
   }, [profile])
 
   const clearAll = useCallback(async () => {
-    setJournal((j) => ({ promises: j.promises, forecast: {}, entries: {} }))
+    setJournal((j) => ({ promises: j.promises, forecast: {}, forecastEvents: {}, eventTypes: j.eventTypes, entries: {} }))
     if (profile) await store.clearMyEntries(profile.id)
   }, [profile])
 
@@ -121,7 +127,7 @@ export default function App() {
         journal={journal}
         onLogout={doLogout}
         onConverted={refreshProfile}
-        api={{ saveDayEntry, clearDayEntry, setPromises, setForecast, fillDemo, clearAll }}
+        api={{ saveDayEntry, clearDayEntry, setPromises, setForecastEvents, fillDemo, clearAll }}
       />
     </>
   )

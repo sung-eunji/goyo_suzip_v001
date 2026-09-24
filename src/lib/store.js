@@ -48,6 +48,14 @@ export async function login(email, password, remember = true) {
 export async function convertToAccount(email, password) {
   const { error } = await supabase.auth.updateUser({ email, password });
   if (error) throw error;
+  const { data: u } = await supabase.auth.getUser();
+  if (u?.user) {
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .update({ is_anonymous: false, converted_at: new Date().toISOString() })
+      .eq('id', u.user.id);
+    if (profileError) throw profileError;
+  }
 }
 
 export async function logout() {
@@ -79,7 +87,11 @@ export async function ensureProfile(nickname) {
   if (existing) return existing;
   const { data, error } = await supabase
     .from('profiles')
-    .insert({ id: user.id, nickname: nickname || '고요님', nickname_key: nicknameKey(nickname || '고요님') })
+    .insert({
+      id: user.id,
+      nickname: nickname || '고요님',
+      nickname_key: nicknameKey(nickname || '고요님'),
+    })
     .select()
     .single();
   if (error) throw error;
@@ -109,7 +121,8 @@ export async function fetchJournal(userId) {
   const [
     { data: settings },
     { data: promises },
-    { data: forecasts },
+    { data: forecastEventRows },
+    { data: eventTypes },
     { data: entries },
     { data: surveys },
   ] = await Promise.all([
@@ -124,7 +137,15 @@ export async function fetchJournal(userId) {
       .eq('user_id', userId)
       .eq('is_active', true)
       .order('position'),
-    supabase.from('forecasts').select('date,level').eq('user_id', userId),
+    supabase
+      .from('forecast_day_events')
+      .select('date,event_type')
+      .eq('user_id', userId),
+    supabase
+      .from('forecast_event_types')
+      .select('key,label_ko,weight,sort_order')
+      .eq('is_active', true)
+      .order('sort_order'),
     supabase.from('entries').select('*').eq('user_id', userId),
     supabase
       .from('survey_responses')
@@ -132,6 +153,21 @@ export async function fetchJournal(userId) {
       .eq('user_id', userId)
       .like('survey_key', 'daily:%'),
   ]);
+  const weightByType = Object.fromEntries(
+    (eventTypes || []).map((t) => [t.key, t.weight]),
+  );
+  const forecastEvents = {};
+  (forecastEventRows || []).forEach((r) => {
+    (forecastEvents[r.date] ||= []).push(r.event_type);
+  });
+  // 급증 점수 공식: 그날 표시된 일정 유형의 weight 합, 100으로 캡.
+  // v_forecast_score 뷰와 같은 공식이다(분석 쪽과 앱 표시를 동일하게 유지).
+  const forecast = Object.fromEntries(
+    Object.entries(forecastEvents).map(([date, types]) => [
+      date,
+      Math.min(100, types.reduce((sum, t) => sum + (weightByType[t] || 0), 0)),
+    ]),
+  );
   const map = {};
   const entryIds = (entries || []).map((e) => e.id);
   const [
@@ -224,14 +260,14 @@ export async function fetchJournal(userId) {
     promises: (promises || [])
       .filter((p) => p.month === `${new Date().toISOString().slice(0, 7)}-01`)
       .map((p) => p.text_raw),
-    forecast: Object.fromEntries(
-      (forecasts || []).map((f) => [f.date, f.level]),
-    ),
+    forecast,
+    forecastEvents,
+    eventTypes: eventTypes || [],
     entries: map,
   };
 }
 
-export async function saveSettings(userId, promises, forecast) {
+export async function saveSettings(userId, promises, forecastEvents) {
   const month = `${new Date().toISOString().slice(0, 7)}-01`;
   const { data: current } = await supabase
     .from('promises')
@@ -251,34 +287,30 @@ export async function saveSettings(userId, promises, forecast) {
       .eq('is_active', true);
     if (promiseError) throw promiseError;
     if (promises.length) {
-      const { error } = await supabase
-        .from('promises')
-        .insert(
-          promises.map((text, i) => ({
-            user_id: userId,
-            month,
-            text_raw: text,
-            position: i + 1,
-          })),
-        );
+      const { error } = await supabase.from('promises').insert(
+        promises.map((text, i) => ({
+          user_id: userId,
+          month,
+          text_raw: text,
+          position: i + 1,
+        })),
+      );
       if (error) throw error;
     }
   }
-  const rows = Object.entries(forecast).map(([date, level]) => ({
-    user_id: userId,
-    date,
-    level,
-  }));
+  const rows = Object.entries(forecastEvents).flatMap(([date, types]) =>
+    (types || []).map((event_type) => ({ user_id: userId, date, event_type })),
+  );
   const nextMonth = new Date(`${month}T00:00:00`);
   nextMonth.setMonth(nextMonth.getMonth() + 1);
   await supabase
-    .from('forecasts')
+    .from('forecast_day_events')
     .delete()
     .eq('user_id', userId)
     .gte('date', month)
     .lt('date', iso(nextMonth));
   if (rows.length) {
-    const { error } = await supabase.from('forecasts').upsert(rows);
+    const { error } = await supabase.from('forecast_day_events').insert(rows);
     if (error) throw error;
   }
 }
@@ -387,7 +419,7 @@ export async function deleteEntry(userId, date) {
 
 // 데모 시드를 통째로 저장 (설정 + 여러 기록)
 export async function saveWholeJournal(userId, S) {
-  await saveSettings(userId, S.promises, S.forecast);
+  await saveSettings(userId, S.promises, S.forecastEvents);
   await Promise.all(
     Object.entries(S.entries).map(([date, entry]) =>
       saveEntry(userId, date, entry),
@@ -397,7 +429,7 @@ export async function saveWholeJournal(userId, S) {
 
 export async function clearMyEntries(userId) {
   await supabase.from('entries').delete().eq('user_id', userId);
-  await supabase.from('forecasts').delete().eq('user_id', userId);
+  await supabase.from('forecast_day_events').delete().eq('user_id', userId);
   await supabase.from('promises').delete().eq('user_id', userId);
   await supabase.from('survey_responses').delete().eq('user_id', userId);
   await saveSettings(userId, [], {});

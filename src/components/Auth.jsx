@@ -27,8 +27,8 @@ export default function Auth({ onEntered }) {
         e.code === '23505' || e.message?.includes('profiles_nickname_key')
           ? '이미 사용 중인 닉네임이에요. 같은 사람이라면 로그인하거나, 다른 닉네임을 사용해주세요.'
           : e.message === 'Anonymous sign-ins are disabled'
-          ? 'Supabase에서 익명 로그인이 꺼져 있어요. 관리자에게 Anonymous sign-ins를 켜달라고 요청해주세요.'
-          : e.message || '문제가 생겼어요. 잠시 후 다시 시도해주세요.',
+            ? 'Supabase에서 익명 로그인이 꺼져 있어요. 관리자에게 Anonymous sign-ins를 켜달라고 요청해주세요.'
+            : e.message || '문제가 생겼어요. 잠시 후 다시 시도해주세요.',
       );
     } finally {
       setBusy(false);
@@ -66,11 +66,6 @@ export default function Auth({ onEntered }) {
 
         {view === 'start' ? (
           <div>
-            <p className="startlead">
-              가입 없이 바로 시작해요.
-              <br />
-              닉네임만 있으면 오늘의 고요를 기록할 수 있어요.
-            </p>
             <div className="fld">
               <label>닉네임</label>
               <input
@@ -93,13 +88,14 @@ export default function Auth({ onEntered }) {
             <button className="authbtn" disabled={busy} onClick={start}>
               {busy ? '잠시만요…' : '시작하기'}
             </button>
+
             <p className="authnote">
-              기록은 안전하게 서버에 저장돼요. 다음에 또 보고 싶으면 언제든
-              가입해서 어느 기기에서든 이어볼 수 있어요. 다른 브라우저에서
-              같은 기록을 보려면 가입 후 로그인해주세요.
+              다른 브라우저나 기기에서도 이어보려면, 먼저 시작한 뒤 대시보드에서
+              <b> 가입하고 기록 지키기</b>를 눌러 이메일을 연결해주세요.
             </p>
+
             <p className="switchline">
-              이미 가입했나요?{' '}
+              다른 브라우저에서 기록 이어보기 ·{' '}
               <button
                 className="linkbtn"
                 onClick={() => {
@@ -107,7 +103,7 @@ export default function Auth({ onEntered }) {
                   setView('login');
                 }}
               >
-                로그인
+                로그인하기
               </button>
             </p>
           </div>

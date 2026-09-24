@@ -96,6 +96,6 @@ export function monthChartData(y, m, forecast, entryOf) {
   return [...Array(days)].map((_, i) => {
     const d = i + 1, key = `${y}-${pad(m + 1)}-${pad(d)}`
     const f = forecast[key] || 0, e = entryOf(key)
-    return { d, key, forecast: f ? [0, 18, 42, 66, 86][f] : null, actual: e ? e.surge : null, e }
+    return { d, key, forecast: f || null, actual: e ? e.surge : null, e }
   })
 }

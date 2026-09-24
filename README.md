@@ -10,10 +10,12 @@ React + Vite + Supabase. 외부 참가자 누구나 가입 없이 시작 → 나
 ---
 
 ## 1. 준비물
+
 - Node.js 18+ (`node -v`로 확인)
 - Supabase 프로젝트 (무료 플랜으로 충분)
 
 ## 2. Supabase 설정 (한 번만)
+
 1. https://supabase.com → 새 프로젝트 생성 (이미 계정 있음).
 2. **SQL Editor** → `supabase/schema.sql` 내용을 붙여넣고 **Run**. (테이블 3개 + RLS + is_admin 함수 생성)
 3. **Authentication → Providers → Email**: 그대로 켜둔 채,
@@ -23,6 +25,7 @@ React + Vite + Supabase. 외부 참가자 누구나 가입 없이 시작 → 나
 4. **Project Settings → API** 에서 `Project URL` 과 `anon public` 키를 복사.
 
 ## 3. 로컬 실행
+
 ```bash
 cp .env.example .env      # 그리고 .env 안에 URL / anon key 붙여넣기
 npm install
@@ -30,15 +33,19 @@ npm run dev               # http://localhost:5173
 ```
 
 ## 4. 관리자(나) 지정 + 구독 열기
+
 앱에서 한 번 "시작하기"로 들어가면 내 프로필 행이 생깁니다. 그 다음 Supabase **SQL Editor**에서:
+
 ```sql
 select id, nickname, created_at from public.profiles order by created_at;   -- 내 id 확인
 update public.profiles set is_admin = true, subscribed = true where id = '내-uuid';
 ```
+
 - `is_admin = true` → 앱에 **관리자** 탭이 생기고 참가자 전체를 열람.
 - `subscribed = true` → 이번 주·흐름 잠금 해제. 파일럿에서 참가자에게 열어주려면 그 사람 행의 `subscribed`를 true로.
 
 ## 5. 배포 (Vercel 예시)
+
 1. 이 폴더를 GitHub 저장소로 push (`.env`는 `.gitignore`로 제외됨).
 2. Vercel → New Project → 저장소 선택 (Framework: **Vite** 자동 감지).
 3. **Environment Variables** 에 `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` 추가.
@@ -51,6 +58,7 @@ update public.profiles set is_admin = true, subscribed = true where id = '내-uu
 ---
 
 ## 구조
+
 ```
 src/
   supabaseClient.js     Supabase 클라이언트 + "로그인 유지" 저장 어댑터
@@ -68,23 +76,28 @@ supabase/schema.sql     테이블 + RLS + is_admin()
 ```
 
 ## 온보딩·과금 모델
+
 1. **가입 없이 시작** — 닉네임만. Supabase 익명 로그인으로 서버에 익명 계정 생성.
 2. **가입해서 지키기** — 앱 안 "가입하고 기록 지키기" → 이메일/비번을 같은 계정에 연결(`updateUser`). 기록 그대로 유지, 다른 기기에서도 로그인.
 3. **구독** — 무료는 오늘·이번 달. 돌아보기(이번 주·흐름)는 `subscribed`가 true여야 열림.
 
 ### 사용자 식별 규칙
+
 - 실제 사용자 식별자는 `profiles.id`와 `auth.users.id`입니다.
 - 닉네임은 표시명이며, 공백을 정리한 `profiles.nickname_key`에 유일 제약이 있습니다.
 - 이미 사용 중인 닉네임으로 새 익명 계정을 만들 수는 없습니다.
 - 다른 브라우저나 기기에서 같은 기록을 보려면 익명 상태가 아니라 이메일 계정으로 전환한 뒤 로그인해야 합니다. 닉네임만으로 기존 계정에 자동 연결하면 다른 사람이 기록을 볼 수 있으므로 지원하지 않습니다.
 
 ## 결제 연동 (다음 단계)
+
 지금은 `LockedPage`의 "구독하기" 버튼이 자리만 잡고 있습니다. 실제 결제는 나중에:
+
 - **Toss Payments**(국내 정기결제) 또는 **Stripe Billing** 연동.
 - 결제 성공 웹훅 → `profiles.subscribed = true` 로 갱신 (Supabase Edge Function 권장).
 - 버튼 `onClick`을 결제 위젯 호출로 교체하면 됩니다.
 
 ## 참고 / 주의
+
 - 하루 기록은 `entries` 테이블에 (user_id, date) 한 행. 설정(약속·예보)은 `settings` 한 행.
 - 관리자 상세 분석은 **관리자 탭 → CSV 내려받기** 또는 Supabase 대시보드에서.
 - `profiles.is_admin` / `subscribed` 를 참가자가 스스로 못 바꾸게 하려면, 운영 단계에서 컬럼 권한(REVOKE)이나 트리거로 잠그세요(현재 RLS는 본인 행 update를 허용).
