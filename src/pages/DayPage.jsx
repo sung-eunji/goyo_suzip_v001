@@ -310,7 +310,7 @@ export default function DayPage({ journal, api, today }) {
           </button>
           {saved && <span className="saved">✓ 저장됨</span>}
           <button
-            className="btn ghost"
+            className="btn clear-day-btn"
             style={{ marginLeft: 'auto' }}
             onClick={() => api.clearDayEntry(key)}
           >

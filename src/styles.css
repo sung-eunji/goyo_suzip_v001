@@ -1113,6 +1113,20 @@ textarea {
   border: 1px solid var(--line);
   box-shadow: none;
 }
+.savebar .clear-day-btn {
+  --clear-day-accent: var(--surge);
+  background: var(--surface);
+  border: 1px solid var(--clear-day-accent);
+  color: var(--clear-day-accent);
+  font-weight: 600;
+  box-shadow: none;
+  cursor: pointer;
+}
+.savebar .clear-day-btn:hover {
+  background: var(--surge-wash);
+  border-color: var(--clear-day-accent);
+  color: var(--clear-day-accent);
+}
 
 /* ---------- month ---------- */
 .calendar {
