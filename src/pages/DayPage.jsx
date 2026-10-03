@@ -11,6 +11,7 @@ export default function DayPage({ journal, api, today }) {
   const entry = journal.entries[key];
 
   const [surge, setSurge] = useState(30);
+  const [dayNote, setDayNote] = useState('');
   const [kept, setKept] = useState([]);
   const [moment, setMoment] = useState('');
   const [min, setMin] = useState('');
@@ -25,12 +26,14 @@ export default function DayPage({ journal, api, today }) {
   useEffect(() => {
     const e = journal.entries[key] || {
       surge: 30,
+      dayNote: '',
       kept: [],
       met: null,
       body: [],
       none: false,
     };
     setSurge(e.surge);
+    setDayNote(e.dayNote || '');
     setKept(e.kept || []);
     setMoment(e.met?.moment || '');
     setMin(e.met?.min || '');
@@ -47,6 +50,10 @@ export default function DayPage({ journal, api, today }) {
   }, [key, entry]);
 
   const isToday = iso(curDay) === iso(today);
+  const startOfDay = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+  const daysAgo = Math.round((startOfDay(today) - startOfDay(curDay)) / 86400000);
+  // 3일이 지나면 더 이상 손댈 수 없어요 — 늦게 채운 기록이 이탈·급증일 분석을 왜곡하지 않도록.
+  const editable = daysAgo <= 3;
   const shift = (n) => {
     const d = new Date(curDay);
     d.setDate(d.getDate() + n);
@@ -56,12 +63,14 @@ export default function DayPage({ journal, api, today }) {
     set(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
 
   async function save() {
+    if (!editable) return;
     const met =
       moment.trim() || min || feel.length
         ? { moment: moment.trim(), min: +min || 0, feel }
         : null;
     const e = {
       surge,
+      dayNote,
       kept: none ? [] : kept,
       met: none ? null : met,
       body: none ? [] : body,
@@ -102,11 +111,29 @@ export default function DayPage({ journal, api, today }) {
         )}
       </div>
 
-      <div className="card">
+      {!editable && (
+        <div className="card" style={{ marginBottom: 14 }}>
+          <p className="muted" style={{ margin: 0 }}>
+            3일이 지난 날은 더 이상 기록할 수 없어요. 이 날은 "기록 없음"으로
+            처리돼요 — 늦게 채운 기록이 흐름을 흐트러뜨리지 않도록 정한
+            규칙이에요.
+          </p>
+        </div>
+      )}
+
+      <div className="card" style={editable ? undefined : { opacity: 0.55, pointerEvents: 'none' }}>
         <div className="eyebrow" style={{ marginBottom: 14 }}>
           ① 몰아침 게이지
         </div>
-        <WaveGauge value={surge} onChange={setNone ? setSurge : setSurge} />
+        <WaveGauge value={surge} onChange={setSurge} />
+        <div className="metgrid" style={{ marginTop: 10 }}>
+          <input
+            type="text"
+            value={dayNote}
+            onChange={(e) => setDayNote(e.target.value)}
+            placeholder="오늘 몰아침, 무슨 일이었나요 (선택)"
+          />
+        </div>
 
         <div className={'field' + (none ? ' dimmed' : '')}>
           <div className="flabel">
@@ -139,15 +166,15 @@ export default function DayPage({ journal, api, today }) {
         <div className={'field' + (none ? ' dimmed' : '')}>
           <div className="flabel">
             <span className="n">③</span>
-            <h3>찾아온 고요</h3>
-            <span className="hint">계획에 없던, 뜻밖에 스며든 고요</span>
+            <h3>뜻밖에 찾아온 고요</h3>
+            <span className="hint">뜻밖의 고요가 있었다면 적어주세요</span>
           </div>
           <div className="metgrid">
             <input
               type="text"
               value={moment}
               onChange={(e) => setMoment(e.target.value)}
-              placeholder="어떤 순간이었나요 — 예: 커피 내리며 창밖 보기"
+              placeholder="예: 커피를 마시며 창밖을 본 순간"
             />
             <div className="minwrap">
               <input
@@ -163,9 +190,9 @@ export default function DayPage({ journal, api, today }) {
           </div>
           <div className="feelwrap">
             <span className="feellabel">
-              그때 몸은 어떻게 답했나요{' '}
+              그때 몸은 어떻게 답했나요?{' '}
               <span className="muted" style={{ fontWeight: 400 }}>
-                · 골라주세요
+                · 느낌이 있었다면 골라주세요
               </span>
             </span>
             <div className="chips col-flow">

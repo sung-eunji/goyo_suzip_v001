@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { cssv } from '../lib/render'
 import { surgeLabel } from '../lib/data'
 
-export default function WaveGauge({ value, onChange }) {
+export default function WaveGauge({ value, onChange, step = 10 }) {
   const canvasRef = useRef(null)
   const targetRef = useRef(value)
   const dispRef = useRef(value)
@@ -54,10 +54,24 @@ export default function WaveGauge({ value, onChange }) {
         <canvas ref={canvasRef} />
         <div className="gaugetop"><div className="row">
           <span className="state serif">{surgeLabel(value)}</span>
-          <span className="pct serif tnum">{value}<span style={{ fontSize: 16 }}>%</span></span>
+          <span className="pct serif tnum">
+            <input
+              type="number"
+              min="0"
+              max="100"
+              step={step}
+              value={value}
+              aria-label="몰아침 정도 직접 입력"
+              onChange={(e) => {
+                const n = Math.round((+e.target.value || 0) / step) * step
+                onChange(Math.max(0, Math.min(100, n)))
+              }}
+              style={{ width: 56, textAlign: 'right', background: 'transparent', border: 'none', font: 'inherit', color: 'inherit' }}
+            /><span style={{ fontSize: 16 }}>%</span>
+          </span>
         </div></div>
       </div>
-      <input type="range" min="0" max="100" value={value} className="slider" aria-label="몰아침 정도"
+      <input type="range" min="0" max="100" step={step} value={value} className="slider" aria-label="몰아침 정도"
         onChange={(e) => onChange(+e.target.value)} />
       <div className="scaleends"><span>잔잔 — 물결은 늘 흐른다</span><span>몰아침</span></div>
     </>

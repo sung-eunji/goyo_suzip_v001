@@ -32,7 +32,7 @@ export default function AppShell({
   api,
 }) {
   const today = useMemo(() => new Date(), []);
-  const [tab, setTab] = useState('day');
+  const [tab, setTab] = useState('guide');
   const [isAnon, setIsAnon] = useState(false);
   const [convertOpen, setConvertOpen] = useState(false);
   const msg = useMemo(() => dailyMessage(profile.id), [profile.id]);
@@ -43,11 +43,11 @@ export default function AppShell({
 
   const subscribed = !!profile.subscribed;
   const tabs = [
+    { k: 'guide', label: '안내', sub: '쓰는 법' },
     { k: 'day', label: '오늘', sub: '일 · 2분' },
     { k: 'month', label: '이번 달', sub: '월 · 물때' },
     { k: 'week', label: '이번 주', sub: '주 · 파도' },
     { k: 'chart', label: '흐름', sub: '차트' },
-    { k: 'guide', label: '안내', sub: '쓰는 법' },
   ];
   if (profile.role === 'admin')
     tabs.push({ k: 'admin', label: '관리자', sub: '전체' });

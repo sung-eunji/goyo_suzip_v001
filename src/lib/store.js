@@ -174,7 +174,6 @@ export async function fetchJournal(userId) {
     { data: checks },
     { data: sensations },
     { data: encounters },
-    { data: responses },
   ] = await Promise.all([
     entryIds.length
       ? supabase
@@ -195,13 +194,14 @@ export async function fetchJournal(userId) {
           .in('entry_id', entryIds)
           .order('position')
       : { data: [] },
-    entryIds.length
-      ? supabase
-          .from('encounter_responses')
-          .select('encounter_id,response_key')
-          .in('encounter_id', entryIds)
-      : { data: [] },
   ]);
+  const encounterIds = (encounters || []).map((encounter) => encounter.id);
+  const { data: responses } = encounterIds.length
+    ? await supabase
+        .from('encounter_responses')
+        .select('encounter_id,response_key')
+        .in('encounter_id', encounterIds)
+    : { data: [] };
   const promiseById = Object.fromEntries(
     (promises || []).map((p) => [p.id, p]),
   );
@@ -233,6 +233,7 @@ export async function fetchJournal(userId) {
     const found = entryEncounters[0];
     map[e.local_date] = {
       surge: e.surge,
+      dayNote: e.day_note || '',
       kept: entryChecks
         .map((c) => monthPromises.findIndex((p) => p.id === c.promise_id))
         .filter((i) => i >= 0),
@@ -323,6 +324,7 @@ export async function saveEntry(userId, date, e) {
       local_date: date,
       tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
       surge: e.surge,
+      day_note: e.dayNote?.trim() || null,
       no_stillness: !!e.none,
       updated_at: new Date().toISOString(),
     })

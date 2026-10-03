@@ -1,5 +1,7 @@
 # Supabase DB 스키마 현황 보고서
 
+> 이 문서는 2026-09-18 원격 DB 스냅샷입니다. 이후 테이블과 프로필 보호 트리거가 추가되어 현재 상태와 다를 수 있습니다. 최신 기술/운영 현황은 [기술·파일럿 운영 보고서](technical-and-pilot-report.md)를 참고하세요.
+
 - 프로젝트: `Goyo_suzip_v.001`
 - 프로젝트 Ref: `ehhnkxmrjpzgsazpckjq`
 - 기준일: 2026-09-18

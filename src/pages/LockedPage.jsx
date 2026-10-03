@@ -14,9 +14,7 @@ export default function LockedPage({ tab }) {
           매일 기록하고(<b>오늘</b>) 물때를 예보하는 건(<b>이번 달</b>) 늘 무료예요.
           쌓인 기록을 <b>돌아보는</b> 이번 주·흐름 차트와 전체 히스토리는 구독으로 열립니다.
         </p>
-        <p className="muted" style={{ fontSize: 13, margin: '0 0 20px' }}>월 3,000~5,000원 (가격 준비 중)</p>
         <button className="btn" disabled title="결제 준비 중" style={{ opacity: 0.7 }}>구독하기 — 곧 열려요</button>
-        <p className="authnote" style={{ marginTop: 14 }}>파일럿 기간에는 관리자가 구독을 열어드릴 수 있어요.</p>
       </div>
     </section>
   )
