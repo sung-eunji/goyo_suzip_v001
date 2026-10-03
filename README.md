@@ -38,7 +38,7 @@ npm run dev:pilot
 npm run build:pilot
 ```
 
-배포 서비스에서 `develop` 브랜치의 build command는 `npm run build:pilot`, 구매 체험용 `main` 브랜치는 `npm run build`로 설정하세요. `develop`은 `.env.pilot`의 `VITE_PILOT_MODE=true`로 주/흐름을 잠급니다. 같은 Supabase DB를 사용해도 pilot build에서는 구독 상태와 관계없이 잠깁니다.
+`develop` 브랜치에서는 기본 `npm run dev`와 `npm run build`가 pilot mode로 동작합니다. 구매 체험용 `main` 브랜치는 기본 명령이 일반 구독 모드입니다. `develop`은 `.env.pilot`의 `VITE_PILOT_MODE=true`로 주/흐름을 잠그므로 같은 Supabase DB를 사용해도 구독 상태와 관계없이 참가자에게 잠금 미리보기를 보여줍니다.
 
 ### 이메일 확인·비밀번호 재설정 URL
 

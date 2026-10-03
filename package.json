@@ -5,9 +5,9 @@
   "type": "module",
   "description": "고요수집 / Collecting Stillness — 감각 트래커 (React + Supabase)",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --mode pilot",
     "dev:pilot": "vite --mode pilot",
-    "build": "vite build",
+    "build": "vite build --mode pilot",
     "build:pilot": "vite build --mode pilot",
     "preview": "vite preview"
   },
