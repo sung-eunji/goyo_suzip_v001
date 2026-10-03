@@ -1,13 +1,32 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { cssv } from '../lib/render'
 import { surgeLabel } from '../lib/data'
 
 export default function WaveGauge({ value, onChange, step = 10 }) {
   const canvasRef = useRef(null)
+  const [valueDraft, setValueDraft] = useState(String(value))
   const targetRef = useRef(value)
   const dispRef = useRef(value)
   const phaseRef = useRef(0)
-  useEffect(() => { targetRef.current = value }, [value])
+  useEffect(() => {
+    targetRef.current = value
+    setValueDraft(String(value))
+  }, [value])
+
+  const commitValue = () => {
+    if (valueDraft.trim() === '') {
+      setValueDraft(String(value))
+      return
+    }
+    const parsed = Number(valueDraft)
+    if (!Number.isFinite(parsed)) {
+      setValueDraft(String(value))
+      return
+    }
+    const bounded = Math.max(0, Math.min(100, parsed))
+    const snapped = bounded === 100 ? 100 : Math.round(bounded / step) * step
+    onChange(Math.max(0, Math.min(100, snapped)))
+  }
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -23,7 +42,7 @@ export default function WaveGauge({ value, onChange, step = 10 }) {
       dispRef.current += (targetRef.current - dispRef.current) * 0.05
       const w = canvas.width, h = canvas.height, s = dispRef.current / 100
       ctx.clearRect(0, 0, w, h)
-      const baseY = h * 0.6, amp = (5 + s * 36) * DPR, sec = 0.26 + s * 0.26
+      const baseY = h * 0.6, amp = (5 + s * 45) * DPR, sec = 0.26 + s * 0.26
       const c1 = cssv('--surge'), c2 = cssv('--surge-soft')
       const layers = [
         { col: c2, alpha: 0.36, yo: 14 * DPR, ph: 0.0, waves: [{ k: 1.4, a: 1, sp: 0.5 }, { k: 2.6, a: sec, sp: 0.82 }] },
@@ -41,7 +60,7 @@ export default function WaveGauge({ value, onChange, step = 10 }) {
         for (let x = 0; x <= w; x += 5) { const y = baseY + L.yo + waveY(x, w, L, amp); x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y) }
         ctx.stroke()
       }
-      if (!REDUCE) phaseRef.current += 0.02
+      if (!REDUCE) phaseRef.current += 0.02 + s * 0.008
       raf = requestAnimationFrame(draw)
     }
     draw()
@@ -60,13 +79,18 @@ export default function WaveGauge({ value, onChange, step = 10 }) {
               min="0"
               max="100"
               step={step}
-              value={value}
+              value={valueDraft}
               aria-label="몰아침 정도 직접 입력"
-              onChange={(e) => {
-                const n = Math.round((+e.target.value || 0) / step) * step
-                onChange(Math.max(0, Math.min(100, n)))
+              onChange={(e) => setValueDraft(e.target.value)}
+              onBlur={commitValue}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  commitValue()
+                  e.currentTarget.blur()
+                }
               }}
-              style={{ width: 56, textAlign: 'right', background: 'transparent', border: 'none', font: 'inherit', color: 'inherit' }}
+              className="surge-value"
             /><span style={{ fontSize: 16 }}>%</span>
           </span>
         </div></div>

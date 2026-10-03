@@ -1587,6 +1587,23 @@ table.dtable th {
 table.dtable td {
   font-variant-numeric: tabular-nums;
 }
+.gaugetop .surge-value {
+  width: 92px;
+  padding: 0;
+  text-align: right;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+.gaugetop .surge-value::-webkit-inner-spin-button,
+.gaugetop .surge-value::-webkit-outer-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
 .insightbox {
   margin-top: 16px;
   padding: 15px 18px;
