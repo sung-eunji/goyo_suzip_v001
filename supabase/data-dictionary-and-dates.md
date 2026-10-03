@@ -31,7 +31,8 @@ auth.users.id = public.profiles.id
 | 입력/행동                    | 저장 테이블과 주요 컬럼                                           | 연결 키                                                            |
 | ---------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------ |
 | 이번 달 고요 약속            | `promises.text_raw`, `month`, `position`, `is_active`             | `promises.user_id -> profiles.id`                                  |
-| 날짜별 일정 예보 유형        | `forecast_day_events.date`, `event_type`                          | `user_id -> profiles.id`, `event_type -> forecast_event_types.key` |
+| 날짜별 일정 예보 유형/기타 설명 | `forecast_day_events.date`, `event_type`, `event_note`            | `user_id -> profiles.id`, `event_type -> forecast_event_types.key` |
+| 사용자가 선택한 급증도       | `forecasts.date`, `level` (0–4)                                  | `user_id -> profiles.id`; 화면 점수는 `level × 25%`                |
 | 실제 몰아침과 상황 메모      | `entries.surge`, `day_note`, `no_stillness`, `local_date`, `tz`   | `entries.user_id -> profiles.id`                                   |
 | 그날 지킨 약속               | `entry_promise_checks.done`, `minutes`                            | `entry_id -> entries.id`, `promise_id -> promises.id`              |
 | 몸 감각 태그                 | `entry_sensations.category`, `option_key` 또는 `text_raw`         | `entry_id -> entries.id`                                           |
@@ -42,6 +43,10 @@ auth.users.id = public.profiles.id
 | 제품 사용 이벤트             | `events.name`, `props`, `occurred_at`                             | `events.user_id -> profiles.id`                                    |
 
 `settings`에는 테마·알림 시각 등 UI 설정을 저장합니다. 분석 대상인 일일 관찰은 `settings`에 넣지 않습니다.
+
+### 이번 달 일정·급증 예보
+
+달력에서 날짜를 열고 마감·출장·아이 일정·기타를 별도로 표시합니다. 기타 선택 시 입력한 메모는 `forecast_day_events.event_note`에 저장됩니다. 같은 날짜의 급증 예상은 `forecasts.level`에 0–4로 따로 저장하며 화면 단계는 `낮음 0%`, `중약 25%`, `중간 50%`, `중강 75%`, `높음 100%`입니다. 달력 칸 높이와 `v_forecast_score.score`는 항상 `level × 25`입니다. 예보 점수는 일정 종류별 가중치 합산이 아니므로 일정이 여러 개여도 선택한 급증 단계가 그대로 유지됩니다.
 
 ## 3. 날짜와 시각의 의미
 
@@ -56,7 +61,7 @@ auth.users.id = public.profiles.id
 | `encounters.created_at` (`timestamptz`)       | `encounters`          | 찾아온 고요 행을 DB에 기록한 시각. 소속 `entry_id`를 따라가면 해당 현지 기록 날짜를 알 수 있음 |
 | `promises.month` (`date`)                     | `promises`            | 약속이 적용되는 달의 1일. 예: `2026-10-01`                                                     |
 | `forecast_day_events.date` (`date`)           | `forecast_day_events` | 일정이 예상되는 미래/당일 날짜                                                                 |
-| `forecasts.date` (`date`)                     | `forecasts`           | 점수형 예보를 저장하는 날짜. 현재 앱 예보 화면은 일정 유형 테이블을 주로 사용                  |
+| `forecasts.date` (`date`)                     | `forecasts`           | 급증도 선택 날짜. `level` 0–4를 저장하고 뷰가 0/25/50/75/100%로 계산                       |
 | `survey_responses.created_at` (`timestamptz`) | `survey_responses`    | 설문 답변을 최초 저장한 시각. 일별 답변 날짜는 `survey_key`에도 포함                           |
 | `events.occurred_at` (`timestamptz`)          | `events`              | 제품 이벤트가 실제 발생했다고 기록한 시각                                                      |
 | `weekly_reviews.week_start` (`date`)          | `weekly_reviews`      | 회고가 가리키는 주의 시작 날짜. 화면 날짜 계산은 현재 일요일 시작 기준                         |
@@ -76,7 +81,8 @@ UNIQUE (user_id, local_date)
 auth.users
   └─ profiles (1:1, 같은 id)
       ├─ promises (사용자·월별)
-      ├─ forecast_day_events (사용자·날짜·일정유형별)
+      ├─ forecast_day_events (사용자·날짜·일정유형·기타설명별)
+      ├─ forecasts (사용자·날짜별 급증 단계 0–4)
       ├─ entries (사용자·현지날짜별 1행)
       │   ├─ entry_promise_checks ── promises
       │   ├─ entry_sensations
@@ -93,6 +99,7 @@ auth.users
 - `profiles.nickname_key`: 표시 닉네임 중복 금지
 - `entries(user_id, local_date)`: 사용자/현지날짜별 일일 기록 한 행
 - `forecast_day_events(user_id, date, event_type)`: 같은 일정유형 중복 방지
+- `forecasts(user_id, date)`: 날짜별 급증 단계 한 건
 - `survey_responses(user_id, survey_key)`: 같은 일자/설문 답변 중복 방지
 
 ## 5. 관리자가 보는 데이터와 조합
@@ -109,7 +116,7 @@ auth.users
 - `entries.id = entry_sensations.entry_id`: 몰아침 정도와 몸 감각 연결
 - `entries.id = entry_promise_checks.entry_id`, `promises.id = entry_promise_checks.promise_id`: 약속 유형과 실천 연결
 - `entries.id = encounters.entry_id`, `encounters.id = encounter_responses.encounter_id`: 찾아온 고요와 몸의 응답 연결
-- `(user_id, date)`로 `forecast_day_events` 또는 `v_forecast_score`와 `entries` 연결: 예상 일정/강도와 실제 몰아침 비교
+- `(user_id, date)`로 `forecast_day_events`, `forecasts`/`v_forecast_score`, `entries` 연결: 일정 맥락·예상 강도와 실제 몰아침 비교
 - `survey_responses.answers`: 니즈, 기대 변화, 해결감을 날짜/코호트별로 집계
 
 관리자 RLS는 `profiles`와 사용자 데이터 행을 읽도록 허용하지만, 현재 관리자 UI는 전체 컬럼을 표시하지 않고 집계 위주입니다. 이메일은 `auth.users`에 있으며 일반 `profiles` 조회나 현재 CSV에 포함하지 않습니다. 성별은 `profiles.gender`에 저장되지만 현재 관리자 요약 화면/CSV에는 표시되지 않습니다.
@@ -123,7 +130,7 @@ auth.users
 - 관리자 판별: `is_admin()`
 - 닉네임 가능 여부: `is_nickname_available(text)`
 - 일별 분석: `v_day`
-- 예보 점수 분석: `v_forecast_score`
+- 예보 점수 분석: `v_forecast_score`는 `forecasts.level × 25`로 0/25/50/75/100%를 반환
 - `profiles.gender` 허용값은 적용 마이그레이션 후 `man`, `woman`, `prefer_not_to_say`; 선택을 DB에서도 제한
 - `entries.local_date`는 사용자 날짜, `created_at/updated_at`은 시스템 시각이므로 리텐션/기록 시각 분석에서 별도 사용
 

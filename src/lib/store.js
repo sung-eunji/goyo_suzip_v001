@@ -178,6 +178,7 @@ export async function fetchJournal(userId) {
     { data: settings },
     { data: promises },
     { data: forecastEventRows },
+    { data: forecastLevelRows },
     { data: eventTypes },
     { data: entries },
     { data: surveys },
@@ -195,7 +196,11 @@ export async function fetchJournal(userId) {
       .order('position'),
     supabase
       .from('forecast_day_events')
-      .select('date,event_type')
+      .select('date,event_type,event_note')
+      .eq('user_id', userId),
+    supabase
+      .from('forecasts')
+      .select('date,level')
       .eq('user_id', userId),
     supabase
       .from('forecast_event_types')
@@ -209,23 +214,17 @@ export async function fetchJournal(userId) {
       .eq('user_id', userId)
       .like('survey_key', 'daily:%'),
   ]);
-  const weightByType = Object.fromEntries(
-    (eventTypes || []).map((t) => [t.key, t.weight]),
-  );
   const forecastEvents = {};
+  const forecastEventNotes = {};
   (forecastEventRows || []).forEach((r) => {
     (forecastEvents[r.date] ||= []).push(r.event_type);
+    if (r.event_note) (forecastEventNotes[r.date] ||= {})[r.event_type] = r.event_note;
   });
-  // 급증 점수 공식: 그날 표시된 일정 유형의 weight 합, 100으로 캡.
-  // v_forecast_score 뷰와 같은 공식이다(분석 쪽과 앱 표시를 동일하게 유지).
+  const forecastLevels = Object.fromEntries(
+    (forecastLevelRows || []).map((r) => [r.date, r.level]),
+  );
   const forecast = Object.fromEntries(
-    Object.entries(forecastEvents).map(([date, types]) => [
-      date,
-      Math.min(
-        100,
-        types.reduce((sum, t) => sum + (weightByType[t] || 0), 0),
-      ),
-    ]),
+    Object.entries(forecastLevels).map(([date, level]) => [date, level * 25]),
   );
   const map = {};
   const entryIds = (entries || []).map((e) => e.id);
@@ -318,56 +317,93 @@ export async function fetchJournal(userId) {
       .filter((p) => p.month === `${new Date().toISOString().slice(0, 7)}-01`)
       .map((p) => p.text_raw),
     forecast,
+    forecastLevels,
     forecastEvents,
+    forecastEventNotes,
     eventTypes: eventTypes || [],
     entries: map,
   };
 }
 
-export async function saveSettings(userId, promises, forecastEvents) {
-  const month = `${new Date().toISOString().slice(0, 7)}-01`;
-  const { data: current } = await supabase
-    .from('promises')
-    .select('text_raw,position')
-    .eq('user_id', userId)
-    .eq('month', month)
-    .eq('is_active', true)
-    .order('position');
-  const unchanged =
-    (current || []).map((p) => p.text_raw).join('\n') === promises.join('\n');
-  if (!unchanged) {
-    const { error: promiseError } = await supabase
+export async function saveSettings(
+  userId,
+  promises,
+  forecastEvents,
+  forecastLevels = {},
+  forecastEventNotes = {},
+  targetMonth = `${new Date().toISOString().slice(0, 7)}-01`,
+  persistPromises = true,
+) {
+  const month = targetMonth;
+  if (persistPromises) {
+    const { data: current } = await supabase
       .from('promises')
-      .update({ is_active: false })
+      .select('text_raw,position')
       .eq('user_id', userId)
       .eq('month', month)
-      .eq('is_active', true);
-    if (promiseError) throw promiseError;
-    if (promises.length) {
-      const { error } = await supabase.from('promises').insert(
-        promises.map((text, i) => ({
-          user_id: userId,
-          month,
-          text_raw: text,
-          position: i + 1,
-        })),
-      );
-      if (error) throw error;
+      .eq('is_active', true)
+      .order('position');
+    const unchanged =
+      (current || []).map((p) => p.text_raw).join('\n') === promises.join('\n');
+    if (!unchanged) {
+      const { error: promiseError } = await supabase
+        .from('promises')
+        .update({ is_active: false })
+        .eq('user_id', userId)
+        .eq('month', month)
+        .eq('is_active', true);
+      if (promiseError) throw promiseError;
+      if (promises.length) {
+        const { error } = await supabase.from('promises').insert(
+          promises.map((text, i) => ({
+            user_id: userId,
+            month,
+            text_raw: text,
+            position: i + 1,
+          })),
+        );
+        if (error) throw error;
+      }
     }
   }
-  const rows = Object.entries(forecastEvents).flatMap(([date, types]) =>
-    (types || []).map((event_type) => ({ user_id: userId, date, event_type })),
-  );
   const nextMonth = new Date(`${month}T00:00:00`);
   nextMonth.setMonth(nextMonth.getMonth() + 1);
+  const endDate = iso(nextMonth);
+  const rows = Object.entries(forecastEvents)
+    .filter(([date]) => date >= month && date < endDate)
+    .flatMap(([date, types]) =>
+      (types || []).map((event_type) => ({
+      user_id: userId,
+      date,
+      event_type,
+      event_note: event_type === 'other' ? forecastEventNotes[date]?.other?.trim() || null : null,
+      })),
+    );
   await supabase
     .from('forecast_day_events')
     .delete()
     .eq('user_id', userId)
     .gte('date', month)
-    .lt('date', iso(nextMonth));
+    .lt('date', endDate);
   if (rows.length) {
     const { error } = await supabase.from('forecast_day_events').insert(rows);
+    if (error) throw error;
+  }
+  await supabase
+    .from('forecasts')
+    .delete()
+    .eq('user_id', userId)
+    .gte('date', month)
+    .lt('date', endDate);
+  const levelRows = Object.entries(forecastLevels)
+    .filter(([date]) => date >= month && date < endDate)
+    .map(([date, level]) => ({
+      user_id: userId,
+      date,
+      level: Math.max(0, Math.min(4, Number(level) || 0)),
+    }));
+  if (levelRows.length) {
+    const { error } = await supabase.from('forecasts').upsert(levelRows);
     if (error) throw error;
   }
 }

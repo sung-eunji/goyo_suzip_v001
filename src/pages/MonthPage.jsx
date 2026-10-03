@@ -1,45 +1,115 @@
-import { useEffect, useState } from 'react'
-import { pad, iso, DOW, FORECAST_EVENT_TYPES } from '../lib/data'
+import { useEffect, useState } from 'react';
+import { pad, iso, DOW } from '../lib/data';
+
+const DEFAULT_EVENT_TYPES = [
+  { key: 'deadline', label_ko: '마감', sort_order: 10 },
+  { key: 'trip', label_ko: '출장', sort_order: 20 },
+  { key: 'kids', label_ko: '아이 일정', sort_order: 30 },
+  { key: 'other', label_ko: '기타', sort_order: 40 },
+];
+
+const LEVELS = [
+  { value: 0, label: '낮음' },
+  { value: 1, label: '중약' },
+  { value: 2, label: '중간' },
+  { value: 3, label: '중강' },
+  { value: 4, label: '높음' },
+];
+
+function levelFromJournal(journal, date) {
+  if (journal.forecastLevels?.[date] !== undefined) return journal.forecastLevels[date];
+  return Math.max(0, Math.min(4, Math.round((journal.forecast?.[date] || 0) / 25)));
+}
 
 export default function MonthPage({ journal, api, today }) {
-  const [mv, setMv] = useState({ y: today.getFullYear(), m: today.getMonth() })
-  const [promises, setPromises] = useState(journal.promises)
-  const [editingKey, setEditingKey] = useState(null)
-  useEffect(() => { setPromises(journal.promises) }, [journal.promises])
+  const [monthView, setMonthView] = useState({ y: today.getFullYear(), m: today.getMonth() });
+  const [promises, setPromises] = useState(journal.promises);
+  const [editingKey, setEditingKey] = useState(null);
+  const [otherDraft, setOtherDraft] = useState('');
+  useEffect(() => setPromises(journal.promises), [journal.promises]);
 
-  const { y, m } = mv
-  const first = new Date(y, m, 1).getDay()
-  const days = new Date(y, m + 1, 0).getDate()
-  const todayKey = iso(today)
-  const eventTypes = journal.eventTypes?.length ? journal.eventTypes : FORECAST_EVENT_TYPES
-  const labelOf = (typeKey) => eventTypes.find((t) => t.key === typeKey)?.label_ko || typeKey
+  const { y, m } = monthView;
+  const first = new Date(y, m, 1).getDay();
+  const days = new Date(y, m + 1, 0).getDate();
+  const todayKey = iso(today);
+  const eventTypes = journal.eventTypes?.length ? journal.eventTypes : DEFAULT_EVENT_TYPES;
+  const selectedEvents = journal.forecastEvents?.[editingKey] || [];
+  const selectedLevel = editingKey ? levelFromJournal(journal, editingKey) : 0;
+  const otherNote = editingKey
+    ? journal.forecastEventNotes?.[editingKey]?.other || ''
+    : '';
+  useEffect(() => setOtherDraft(otherNote), [editingKey, otherNote]);
+  const labelOf = (key) => eventTypes.find((type) => type.key === key)?.label_ko || key;
 
-  const stepMonth = (n) => { let mm = m + n, yy = y; if (mm < 0) { mm = 11; yy-- } if (mm > 11) { mm = 0; yy++ }; setMv({ y: yy, m: mm }); setEditingKey(null) }
-  const toggleEvent = (key, typeKey) => {
-    const current = journal.forecastEvents[key] || []
-    const next = current.includes(typeKey) ? current.filter((t) => t !== typeKey) : [...current, typeKey]
-    const nc = { ...journal.forecastEvents }
-    if (next.length) nc[key] = next; else delete nc[key]
-    api.setForecastEvents(nc)
+  const stepMonth = (step) => {
+    let nextMonth = m + step;
+    let nextYear = y;
+    if (nextMonth < 0) { nextMonth = 11; nextYear -= 1; }
+    if (nextMonth > 11) { nextMonth = 0; nextYear += 1; }
+    setMonthView({ y: nextYear, m: nextMonth });
+    setEditingKey(null);
+  };
+
+  const toggleEvent = (date, typeKey) => {
+    const currentTypes = journal.forecastEvents?.[date] || [];
+    const nextTypes = currentTypes.includes(typeKey)
+      ? currentTypes.filter((type) => type !== typeKey)
+      : [...currentTypes, typeKey];
+    const forecastEvents = { ...(journal.forecastEvents || {}) };
+    if (nextTypes.length) forecastEvents[date] = nextTypes;
+    else delete forecastEvents[date];
+    api.setForecastEvents(
+      forecastEvents,
+      journal.forecastEventNotes || {},
+      `${date.slice(0, 7)}-01`,
+    );
+  };
+
+  const saveOtherNote = () => {
+    const forecastEventNotes = { ...(journal.forecastEventNotes || {}) };
+    forecastEventNotes[editingKey] = {
+      ...(forecastEventNotes[editingKey] || {}),
+      other: otherDraft,
+    };
+    api.setForecastEvents(
+      journal.forecastEvents || {},
+      forecastEventNotes,
+      `${editingKey.slice(0, 7)}-01`,
+    );
+  };
+
+  const commitPromises = (items) => {
+    api.setPromises(items.map((text) => text.trim()).filter(Boolean));
+  };
+
+  const cells = [];
+  for (let i = 0; i < first; i += 1) {
+    cells.push(<div key={`blank-${i}`} className="cell blank" />);
   }
-  const commitPromises = (arr) => { const cleaned = arr.map((s) => s.trim()).filter(Boolean); api.setPromises(cleaned) }
-
-  const cells = []
-  for (let i = 0; i < first; i++) cells.push(<div key={'b' + i} className="cell blank" />)
-  for (let d = 1; d <= days; d++) {
-    const key = `${y}-${pad(m + 1)}-${pad(d)}`
-    const f = journal.forecast[key] || 0
-    const types = journal.forecastEvents[key] || []
-    const e = journal.entries[key]
-    const fillH = (f / 100) * 44
-    const fillBg = f >= 66 ? 'var(--surge)' : f >= 38 ? 'var(--surge-soft)' : 'var(--surge-wash)'
+  for (let day = 1; day <= days; day += 1) {
+    const key = `${y}-${pad(m + 1)}-${pad(day)}`;
+    const level = levelFromJournal(journal, key);
+    const score = level * 25;
+    const types = journal.forecastEvents?.[key] || [];
+    const customNote = journal.forecastEventNotes?.[key]?.other;
+    const entry = journal.entries[key];
+    const fillColor = level >= 3 ? 'var(--surge)' : level >= 2 ? 'var(--surge-soft)' : 'var(--surge-wash)';
+    const title = `급증도 ${score}% · ${LEVELS[level].label} · ${types.map(labelOf).join('·') || '일정 없음'}${customNote ? ` · ${customNote}` : ''}`;
     cells.push(
-      <div key={key} className={'cell' + (key === todayKey ? ' today' : '') + (key === editingKey ? ' active' : '')} title={`예보: ${types.map(labelOf).join('·') || '없음'}` + (e ? ` · 실제 ${e.surge}%` : '')} onClick={() => setEditingKey(editingKey === key ? null : key)}>
-        <span className="dn">{d}</span>
-        {f > 0 && <div className="fill" style={{ height: fillH, background: fillBg, opacity: f >= 66 ? 0.9 : 0.7 }} />}
-        {e && (e.none ? <span className="gd none" /> : (e.kept.length || e.met) ? <span className="gd" /> : null)}
-      </div>
-    )
+      <button
+        type="button"
+        key={key}
+        className={`cell${key === todayKey ? ' today' : ''}${key === editingKey ? ' active' : ''}`}
+        title={title}
+        aria-label={`${m + 1}월 ${day}일, ${title}`}
+        aria-pressed={key === editingKey}
+        onClick={() => setEditingKey(editingKey === key ? null : key)}
+      >
+        <span className="dn">{day}</span>
+        {level > 0 && <span className="fill" style={{ height: `${level * 25}%`, background: fillColor }} />}
+        {entry && (entry.none ? <span className="gd none" /> : (entry.kept.length || entry.met) ? <span className="gd" /> : null)}
+      </button>,
+    );
   }
 
   return (
@@ -47,52 +117,91 @@ export default function MonthPage({ journal, api, today }) {
       <div className="card" style={{ marginBottom: 18 }}>
         <div className="eyebrow">월초 리추얼 · 15분</div>
         <h2 className="serif" style={{ fontSize: 22, margin: '8px 0 6px' }}>이번 달 물때 예보</h2>
-        <p className="lead">밀려올 파도를 미리 압니다. 날짜를 눌러 그날 무슨 일정이 있는지 표시하고(마감·출장·아이 일정), 아래에서 이번 달 고요 약속을 정하세요. <span className="muted">겹치는 일정이 많을수록 물이 더 차올라요 — 급증 점수는 표시한 일정으로 자동 계산돼요.</span></p>
+        <p className="lead">
+          날짜별 일정을 표시하고, 그날 예상되는 급증 정도를 골라주세요. 급증도는 25%씩 높아지며 달력 칸도 네 단계로 차오릅니다.
+        </p>
         <div className="datebar" style={{ margin: '18px 0 16px' }}>
           <button className="nav" onClick={() => stepMonth(-1)} aria-label="이전 달">‹</button>
           <span className="dlabel">{y}년 {m + 1}월</span>
           <button className="nav" onClick={() => stepMonth(1)} aria-label="다음 달">›</button>
         </div>
-        <div className="calendar">{DOW.map((d) => <div key={d} className="dow">{d}</div>)}</div>
-        <div className="calendar" style={{ marginTop: 6 }}>{cells}</div>
+        <div className="calendar">{DOW.map((dayName) => <div key={dayName} className="dow">{dayName}</div>)}</div>
+        <div className="calendar month-calendar" style={{ marginTop: 6 }}>{cells}</div>
+
+        <p className="forecast-instruction">
+          달력에서 날짜를 누르고, 어떤 일정이 있는지 표시한 뒤 예상 급증 정도를 골라주세요.
+        </p>
 
         {editingKey && (
-          <div style={{ marginTop: 14, padding: 14, border: '1px solid var(--line)', borderRadius: 10 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
-              <b>{editingKey} 일정</b>
-              <button className="btn ghost" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => setEditingKey(null)}>닫기</button>
+          <div className="forecast-editor" aria-label={`${editingKey} 일정 입력`}>
+            <div className="forecast-editor-heading">
+              <div>
+                <span className="eyebrow">일정과 예상 강도</span>
+                <b>{editingKey}</b>
+              </div>
+              <button type="button" className="forecast-close" onClick={() => setEditingKey(null)} aria-label="일정 입력 닫기">닫기</button>
             </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {eventTypes.map((t) => {
-                const active = (journal.forecastEvents[editingKey] || []).includes(t.key)
+
+            <div className="forecast-field-label">어떤 일정이 있나요?</div>
+            <div className="forecast-event-options">
+              {eventTypes.map((type) => {
+                const selected = selectedEvents.includes(type.key);
                 return (
                   <button
-                    key={t.key}
-                    onClick={() => toggleEvent(editingKey, t.key)}
-                    className="btn ghost"
-                    style={{
-                      padding: '8px 14px',
-                      fontSize: 13.5,
-                      borderColor: active ? 'var(--surge)' : undefined,
-                      background: active ? 'var(--surge-wash)' : undefined,
-                      fontWeight: active ? 600 : 400,
-                    }}
+                    type="button"
+                    key={type.key}
+                    className={`forecast-event-button${selected ? ' selected' : ''}`}
+                    aria-pressed={selected}
+                    onClick={() => toggleEvent(editingKey, type.key)}
                   >
-                    {t.label_ko}
+                    <span className="event-check" aria-hidden="true">{selected ? '✓' : '+'}</span>
+                    {type.label_ko}
                   </button>
-                )
+                );
               })}
             </div>
-            <p className="muted" style={{ marginTop: 10, fontSize: 12.5 }}>
-              급증 점수: {journal.forecast[editingKey] || 0}%
-            </p>
+
+            {selectedEvents.includes('other') && (
+              <div className="fld forecast-other-field">
+                <label htmlFor="forecast-other-note">기타 일정 내용을 적어주세요</label>
+                <input
+                  id="forecast-other-note"
+                  type="text"
+                  value={otherDraft}
+                  onChange={(event) => setOtherDraft(event.target.value)}
+                  onBlur={saveOtherNote}
+                  placeholder="예: 중요한 미팅, 가족 행사"
+                />
+              </div>
+            )}
+
+            <div className="forecast-field-label">예상되는 급증 정도</div>
+            <div className="forecast-level-options" role="radiogroup" aria-label="급증 정도">
+              {LEVELS.map(({ value, label }) => (
+                <button
+                  type="button"
+                  key={value}
+                  role="radio"
+                  aria-checked={selectedLevel === value}
+                  className={`forecast-level-button${selectedLevel === value ? ' selected' : ''}`}
+                  onClick={() => api.setForecastLevel(editingKey, value)}
+                >
+                  <span>{label}</span>
+                  <b>{value * 25}%</b>
+                </button>
+              ))}
+            </div>
+            <p className="forecast-current-level">선택한 급증도 <strong>{selectedLevel * 25}% · {LEVELS[selectedLevel].label}</strong></p>
           </div>
         )}
 
         <div className="flegend">
-          <span className="sw"><span className="box" style={{ background: 'var(--surface)' }} />잔잔</span>
-          <span className="sw"><span className="box" style={{ background: 'var(--surge-soft)' }} />다소 몰아침</span>
-          <span className="sw"><span className="box" style={{ background: 'var(--surge)' }} />몰아침</span>
+          {LEVELS.map(({ value, label }) => (
+            <span className="sw" key={value}>
+              <span className="box" style={{ background: value === 0 ? 'var(--surface)' : value < 3 ? 'var(--surge-soft)' : 'var(--surge)', opacity: value === 1 ? 0.45 : value === 2 ? 0.7 : 1 }} />
+              {label} {value * 25}%
+            </span>
+          ))}
           <span className="sw"><span className="dot" style={{ background: 'var(--clay)' }} />고요 기록됨</span>
           <span className="sw"><span className="dot" style={{ border: '1.5px solid var(--muted)' }} />고요 없던 날</span>
         </div>
@@ -102,18 +211,29 @@ export default function MonthPage({ journal, api, today }) {
         <div className="eyebrow">이번 달 고요 약속</div>
         <h2 className="serif" style={{ fontSize: 20, margin: '8px 0 4px' }}>1~3개, 고요 습관만</h2>
         <p className="lead" style={{ marginBottom: 16 }}>일반 할 일 리스트가 아니에요. 몰아침 전후에 <b>고요를 넣는</b> 약속만, 아주 사소해도 좋아요.</p>
-        {promises.map((p, i) => (
-          <div key={i} className="promiseedit">
-            <input type="text" value={p} onChange={(e) => setPromises(promises.map((x, j) => (j === i ? e.target.value : x)))}
-              onBlur={() => commitPromises(promises)} />
-            <button className="del" aria-label="삭제" onClick={() => { const arr = promises.filter((_, j) => j !== i); setPromises(arr); commitPromises(arr) }}>×</button>
+        {promises.map((promise, index) => (
+          <div key={`${index}-${promise}`} className="promiseedit">
+            <input
+              type="text"
+              value={promise}
+              onChange={(event) => setPromises(promises.map((item, itemIndex) => itemIndex === index ? event.target.value : item))}
+              onBlur={() => commitPromises(promises)}
+            />
+            <button className="del" aria-label="삭제" onClick={() => {
+              const next = promises.filter((_, itemIndex) => itemIndex !== index);
+              setPromises(next);
+              commitPromises(next);
+            }}>×</button>
           </div>
         ))}
-        <button className="addpromise" disabled={promises.length >= 3}
-          onClick={() => { const arr = [...promises, '새 고요 약속']; setPromises(arr); commitPromises(arr) }}>
+        <button className="addpromise" disabled={promises.length >= 3} onClick={() => {
+          const next = [...promises, '새 고요 약속'];
+          setPromises(next);
+          commitPromises(next);
+        }}>
           {promises.length >= 3 ? '약속은 3개까지 (덜어내는 것도 고요)' : '+ 고요 약속 추가'}
         </button>
       </div>
     </section>
-  )
+  );
 }

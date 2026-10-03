@@ -78,9 +78,11 @@ create table if not exists public.forecast_day_events (
   user_id uuid not null references public.profiles(id) on delete cascade,
   date date not null,
   event_type text not null references public.forecast_event_types(key),
+  event_note text,
   created_at timestamptz not null default now(),
   primary key (user_id, date, event_type)
 );
+alter table public.forecast_day_events add column if not exists event_note text;
 create index if not exists forecast_day_events_user_date_idx on public.forecast_day_events(user_id, date);
 
 create table if not exists public.program_days (
@@ -280,7 +282,5 @@ select e.id, e.user_id, e.local_date, e.surge, e.no_stillness,
 from public.entries e;
 
 create or replace view public.v_forecast_score with (security_invoker = on) as
-select fde.user_id, fde.date, least(100, sum(fet.weight))::smallint as score
-from public.forecast_day_events fde
-join public.forecast_event_types fet on fet.key = fde.event_type
-group by fde.user_id, fde.date;
+select user_id, date, (level * 25)::smallint as score
+from public.forecasts;

@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { isConfigured } from './supabaseClient';
 import * as store from './lib/store';
-import { scoreFromEvents } from './lib/data';
 import Auth from './components/Auth';
 import AppShell from './components/AppShell';
 
@@ -72,7 +71,9 @@ export default function App() {
   const [journal, setJournal] = useState({
     promises: [],
     forecast: {},
+    forecastLevels: {},
     forecastEvents: {},
+    forecastEventNotes: {},
     eventTypes: [],
     entries: {},
   });
@@ -151,25 +152,55 @@ export default function App() {
           profile.id,
           promises,
           journalRef.current.forecastEvents,
+          journalRef.current.forecastLevels,
+          journalRef.current.forecastEventNotes,
         );
     },
     [profile],
   );
 
   const setForecastEvents = useCallback(
-    async (forecastEvents) => {
+    async (
+      forecastEvents,
+      forecastEventNotes = journalRef.current.forecastEventNotes,
+      targetMonth,
+    ) => {
+      const forecastLevels = journalRef.current.forecastLevels;
       const score = Object.fromEntries(
-        Object.entries(forecastEvents).map(([date, types]) => [
+        Object.entries(forecastLevels).map(([date, level]) => [
           date,
-          scoreFromEvents(types, journalRef.current.eventTypes),
+          level * 25,
         ]),
       );
-      setJournal((j) => ({ ...j, forecastEvents, forecast: score }));
+      setJournal((j) => ({ ...j, forecastEvents, forecastEventNotes, forecast: score }));
       if (profile)
         await store.saveSettings(
           profile.id,
           journalRef.current.promises,
           forecastEvents,
+          forecastLevels,
+          forecastEventNotes,
+          targetMonth,
+          false,
+        );
+    },
+    [profile],
+  );
+
+  const setForecastLevel = useCallback(
+    async (date, level) => {
+      const forecastLevels = { ...journalRef.current.forecastLevels, [date]: level };
+      const forecast = { ...journalRef.current.forecast, [date]: level * 25 };
+      setJournal((j) => ({ ...j, forecastLevels, forecast }));
+      if (profile)
+        await store.saveSettings(
+          profile.id,
+          journalRef.current.promises,
+          journalRef.current.forecastEvents,
+          forecastLevels,
+          journalRef.current.forecastEventNotes,
+          `${date.slice(0, 7)}-01`,
+          false,
         );
     },
     [profile],
@@ -229,6 +260,7 @@ export default function App() {
           clearDayEntry,
           setPromises,
           setForecastEvents,
+          setForecastLevel,
         }}
       />
     </>

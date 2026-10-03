@@ -123,9 +123,6 @@ export default function AppShell({
       <div className="footnote">
         <b>고요수집 · Collecting Stillness</b> — 무엇을 했는지가 아니라, 몸이
         어떻게 답했는지를 모읍니다.
-        <br />
-        오늘·이번 달은 무료예요. 돌아보기(이번 주·흐름·전체 히스토리)는 구독하면
-        열려요.
       </div>
 
       {convertOpen && (

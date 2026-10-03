@@ -1138,9 +1138,16 @@ textarea {
   cursor: pointer;
   transition: 0.15s;
   overflow: hidden;
+  color: var(--ink);
+  font-family: inherit;
+  text-align: left;
 }
 .cell:hover {
   border-color: var(--surge);
+}
+.cell.active {
+  border: 2px solid var(--surge);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--surge) 18%, transparent);
 }
 .cell.blank {
   border: 0;
@@ -1201,6 +1208,146 @@ textarea {
   font-size: 12.5px;
   color: var(--muted);
   margin-top: 2px;
+}
+.forecast-instruction {
+  margin: 12px 0 0;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+}
+.forecast-editor {
+  margin-top: 12px;
+  padding: 16px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+.forecast-editor-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 15px;
+}
+.forecast-editor-heading > div {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.forecast-editor-heading .eyebrow {
+  font-size: 10px;
+}
+.forecast-editor-heading b {
+  color: var(--ink);
+  font-size: 16px;
+}
+.forecast-close {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 5px 13px;
+  border: 1px solid var(--surge);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--surge);
+  font-size: 13px;
+  font-weight: 600;
+}
+.forecast-close:hover {
+  background: var(--surge);
+  color: #fff;
+}
+.forecast-field-label {
+  margin: 12px 0 8px;
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 600;
+}
+.forecast-event-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.forecast-event-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 7px 13px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.forecast-event-button:hover {
+  border-color: var(--surge);
+  color: var(--surge);
+}
+.forecast-event-button.selected {
+  border-color: var(--surge);
+  background: var(--surge);
+  color: #fff;
+  font-weight: 650;
+}
+.forecast-event-button .event-check {
+  display: grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  line-height: 1;
+}
+.forecast-other-field {
+  margin-top: 12px;
+}
+.forecast-level-options {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 7px;
+}
+.forecast-level-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 54px;
+  padding: 6px 3px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-family: inherit;
+  font-size: 12px;
+}
+.forecast-level-button b {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+.forecast-level-button:hover {
+  border-color: var(--surge);
+}
+.forecast-level-button.selected {
+  border: 2px solid var(--surge);
+  background: var(--surge-wash);
+  color: var(--ink);
+  font-weight: 700;
+}
+.forecast-level-button.selected b {
+  color: var(--surge);
+  font-weight: 700;
+}
+.forecast-current-level {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.forecast-current-level strong {
+  color: var(--surge);
 }
 
 .promiseedit {
