@@ -63,6 +63,8 @@ create table if not exists public.promises (
   created_at timestamptz not null default now()
 );
 create index if not exists promises_user_month_idx on public.promises(user_id, month);
+create unique index if not exists promises_active_position_uidx
+  on public.promises(user_id, month, position) where is_active;
 
 create table if not exists public.forecasts (
   user_id uuid not null references public.profiles(id) on delete cascade,
@@ -119,6 +121,9 @@ create table if not exists public.entry_sensations (
   text_raw text, check (option_key is not null or nullif(btrim(text_raw), '') is not null)
 );
 create unique index if not exists entry_sensations_uniq on public.entry_sensations(entry_id, option_key) where option_key is not null;
+create unique index if not exists entry_sensations_text_uniq
+  on public.entry_sensations(entry_id, category, lower(btrim(text_raw)))
+  where option_key is null and text_raw is not null;
 
 create table if not exists public.encounters (
   id uuid primary key default gen_random_uuid(),

@@ -147,14 +147,7 @@ export default function App() {
   const setPromises = useCallback(
     async (promises) => {
       setJournal((j) => ({ ...j, promises }));
-      if (profile)
-        await store.saveSettings(
-          profile.id,
-          promises,
-          journalRef.current.forecastEvents,
-          journalRef.current.forecastLevels,
-          journalRef.current.forecastEventNotes,
-        );
+      if (profile) await store.savePromises(profile.id, promises);
     },
     [profile],
   );
@@ -174,14 +167,12 @@ export default function App() {
       );
       setJournal((j) => ({ ...j, forecastEvents, forecastEventNotes, forecast: score }));
       if (profile)
-        await store.saveSettings(
+        await store.saveForecastCalendar(
           profile.id,
-          journalRef.current.promises,
           forecastEvents,
           forecastLevels,
           forecastEventNotes,
           targetMonth,
-          false,
         );
     },
     [profile],
@@ -193,14 +184,12 @@ export default function App() {
       const forecast = { ...journalRef.current.forecast, [date]: level * 25 };
       setJournal((j) => ({ ...j, forecastLevels, forecast }));
       if (profile)
-        await store.saveSettings(
+        await store.saveForecastCalendar(
           profile.id,
-          journalRef.current.promises,
           journalRef.current.forecastEvents,
           forecastLevels,
           journalRef.current.forecastEventNotes,
           `${date.slice(0, 7)}-01`,
-          false,
         );
     },
     [profile],
