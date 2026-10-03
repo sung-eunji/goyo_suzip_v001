@@ -13,10 +13,13 @@ export default function GuidePage() {
         </p>
         <div className="gdef">
           <p className="q">
-            고요란, 바깥으로 향하던 주의를 거두어 지금의 몸과 감각으로 돌아오는 시간입니다.
+            고요란, 바깥으로 향하던 주의를 거두어 지금의 몸과 감각으로 돌아오는
+            시간입니다.
           </p>
           <ul className="cond">
-            <li><b>①</b>외부 자극을 잠시 낮추고, 주의를 몸과 지금으로 돌린다</li>
+            <li>
+              <b>①</b>외부 자극을 잠시 낮추고, 주의를 몸과 지금으로 돌린다
+            </li>
             <li>
               <b>②</b>한 가지에만 머문다 — 걷기든, 읽기든, 설거지든
             </li>
@@ -103,7 +106,6 @@ export default function GuidePage() {
           고요가 없는 날은 실패가 아니라, 물결의 일부를 만들어요.
         </div>
       </div>
-
     </section>
   );
 }

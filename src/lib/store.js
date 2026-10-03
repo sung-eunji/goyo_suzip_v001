@@ -210,10 +210,7 @@ export async function fetchJournal(userId) {
       .from('forecast_day_events')
       .select('date,event_type,event_note')
       .eq('user_id', userId),
-    supabase
-      .from('forecasts')
-      .select('date,level')
-      .eq('user_id', userId),
+    supabase.from('forecasts').select('date,level').eq('user_id', userId),
     supabase
       .from('forecast_event_types')
       .select('key,label_ko,weight,sort_order')
@@ -230,7 +227,8 @@ export async function fetchJournal(userId) {
   const forecastEventNotes = {};
   (forecastEventRows || []).forEach((r) => {
     (forecastEvents[r.date] ||= []).push(r.event_type);
-    if (r.event_note) (forecastEventNotes[r.date] ||= {})[r.event_type] = r.event_note;
+    if (r.event_note)
+      (forecastEventNotes[r.date] ||= {})[r.event_type] = r.event_note;
   });
   const forecastLevels = Object.fromEntries(
     (forecastLevelRows || []).map((r) => [r.date, r.level]),
@@ -337,7 +335,11 @@ export async function fetchJournal(userId) {
   };
 }
 
-export async function savePromises(userId, promises, targetMonth = `${new Date().toISOString().slice(0, 7)}-01`) {
+export async function savePromises(
+  userId,
+  promises,
+  targetMonth = `${new Date().toISOString().slice(0, 7)}-01`,
+) {
   const month = targetMonth;
   return serializeWrite(`promises:${userId}:${month}`, async () => {
     const { data: current, error: readError } = await supabase
@@ -348,7 +350,9 @@ export async function savePromises(userId, promises, targetMonth = `${new Date()
       .eq('is_active', true)
       .order('position');
     if (readError) throw readError;
-    const unchanged = (current || []).map((item) => item.text_raw).join('\n') === promises.join('\n');
+    const unchanged =
+      (current || []).map((item) => item.text_raw).join('\n') ===
+      promises.join('\n');
     if (unchanged) return;
 
     const { error: deactivateError } = await supabase
@@ -359,9 +363,16 @@ export async function savePromises(userId, promises, targetMonth = `${new Date()
       .eq('is_active', true);
     if (deactivateError) throw deactivateError;
     if (promises.length) {
-      const { error } = await supabase.from('promises').insert(
-        promises.map((text, index) => ({ user_id: userId, month, text_raw: text, position: index + 1 })),
-      );
+      const { error } = await supabase
+        .from('promises')
+        .insert(
+          promises.map((text, index) => ({
+            user_id: userId,
+            month,
+            text_raw: text,
+            position: index + 1,
+          })),
+        );
       if (error) throw error;
     }
   });
@@ -381,54 +392,104 @@ export async function saveForecastCalendar(
 
   return serializeWrite(`forecast:${userId}:${month}`, async () => {
     const [existingEventsResult, existingLevelsResult] = await Promise.all([
-      supabase.from('forecast_day_events').select('date,event_type').eq('user_id', userId).gte('date', month).lt('date', endDate),
-      supabase.from('forecasts').select('date').eq('user_id', userId).gte('date', month).lt('date', endDate),
+      supabase
+        .from('forecast_day_events')
+        .select('date,event_type')
+        .eq('user_id', userId)
+        .gte('date', month)
+        .lt('date', endDate),
+      supabase
+        .from('forecasts')
+        .select('date')
+        .eq('user_id', userId)
+        .gte('date', month)
+        .lt('date', endDate),
     ]);
     if (existingEventsResult.error) throw existingEventsResult.error;
     if (existingLevelsResult.error) throw existingLevelsResult.error;
 
     const desiredEvents = Object.entries(forecastEvents)
       .filter(([date]) => date >= month && date < endDate)
-      .flatMap(([date, types]) => (types || []).map((eventType) => ({
-        user_id: userId,
-        date,
-        event_type: eventType,
-        event_note: eventType === 'other' ? forecastEventNotes[date]?.other?.trim() || null : null,
-      })));
-    const desiredEventKeys = new Set(desiredEvents.map((row) => `${row.date}:${row.event_type}`));
-    const removedEvents = (existingEventsResult.data || []).filter((row) => !desiredEventKeys.has(`${row.date}:${row.event_type}`));
+      .flatMap(([date, types]) =>
+        (types || []).map((eventType) => ({
+          user_id: userId,
+          date,
+          event_type: eventType,
+          event_note:
+            eventType === 'other'
+              ? forecastEventNotes[date]?.other?.trim() || null
+              : null,
+        })),
+      );
+    const desiredEventKeys = new Set(
+      desiredEvents.map((row) => `${row.date}:${row.event_type}`),
+    );
+    const removedEvents = (existingEventsResult.data || []).filter(
+      (row) => !desiredEventKeys.has(`${row.date}:${row.event_type}`),
+    );
 
     if (desiredEvents.length) {
-      const { error } = await supabase.from('forecast_day_events').upsert(desiredEvents, { onConflict: 'user_id,date,event_type' });
+      const { error } = await supabase
+        .from('forecast_day_events')
+        .upsert(desiredEvents, { onConflict: 'user_id,date,event_type' });
       if (error) throw error;
     }
     for (const row of removedEvents) {
-      const { error } = await supabase.from('forecast_day_events').delete()
-        .eq('user_id', userId).eq('date', row.date).eq('event_type', row.event_type);
+      const { error } = await supabase
+        .from('forecast_day_events')
+        .delete()
+        .eq('user_id', userId)
+        .eq('date', row.date)
+        .eq('event_type', row.event_type);
       if (error) throw error;
     }
 
     const desiredLevels = Object.entries(forecastLevels)
       .filter(([date]) => date >= month && date < endDate)
-      .map(([date, level]) => ({ user_id: userId, date, level: Math.max(0, Math.min(4, Number(level) || 0)) }));
+      .map(([date, level]) => ({
+        user_id: userId,
+        date,
+        level: Math.max(0, Math.min(4, Number(level) || 0)),
+      }));
     const desiredDates = new Set(desiredLevels.map((row) => row.date));
-    const removedLevels = (existingLevelsResult.data || []).filter((row) => !desiredDates.has(row.date));
+    const removedLevels = (existingLevelsResult.data || []).filter(
+      (row) => !desiredDates.has(row.date),
+    );
     if (desiredLevels.length) {
-      const { error } = await supabase.from('forecasts').upsert(desiredLevels, { onConflict: 'user_id,date' });
+      const { error } = await supabase
+        .from('forecasts')
+        .upsert(desiredLevels, { onConflict: 'user_id,date' });
       if (error) throw error;
     }
     if (removedLevels.length) {
-      const { error } = await supabase.from('forecasts').delete()
-        .eq('user_id', userId).in('date', removedLevels.map((row) => row.date));
+      const { error } = await supabase
+        .from('forecasts')
+        .delete()
+        .eq('user_id', userId)
+        .in(
+          'date',
+          removedLevels.map((row) => row.date),
+        );
       if (error) throw error;
     }
   });
 }
 
-export async function saveSettings(userId, promises, forecastEvents, forecastLevels = {}, forecastEventNotes = {}) {
+export async function saveSettings(
+  userId,
+  promises,
+  forecastEvents,
+  forecastLevels = {},
+  forecastEventNotes = {},
+) {
   await Promise.all([
     savePromises(userId, promises),
-    saveForecastCalendar(userId, forecastEvents, forecastLevels, forecastEventNotes),
+    saveForecastCalendar(
+      userId,
+      forecastEvents,
+      forecastLevels,
+      forecastEventNotes,
+    ),
   ]);
 }
 
@@ -463,19 +524,21 @@ export async function saveEntry(userId, date, e) {
     .eq('is_active', true)
     .order('position');
   if (e.kept?.length && promises?.length) {
-    const { error: checkError } = await supabase.from('entry_promise_checks').insert(
-      e.kept
-        .map((i) => promises[i])
-        .filter(Boolean)
-        .map((p) => ({
-          entry_id: entry.id,
-          user_id: userId,
-          promise_id: p.id,
-          done: true,
-        })),
-    );
-      if (checkError) throw checkError;
-    }
+    const { error: checkError } = await supabase
+      .from('entry_promise_checks')
+      .insert(
+        e.kept
+          .map((i) => promises[i])
+          .filter(Boolean)
+          .map((p) => ({
+            entry_id: entry.id,
+            user_id: userId,
+            promise_id: p.id,
+            done: true,
+          })),
+      );
+    if (checkError) throw checkError;
+  }
   const sensationRows = Object.entries(BODY).flatMap(([category, group]) =>
     (e.body || [])
       .filter((text) => group.items.includes(text))
@@ -492,7 +555,9 @@ export async function saveEntry(userId, date, e) {
       })),
   );
   if (sensationRows.length) {
-    const { error: sensationError } = await supabase.from('entry_sensations').insert(sensationRows);
+    const { error: sensationError } = await supabase
+      .from('entry_sensations')
+      .insert(sensationRows);
     if (sensationError) throw sensationError;
   }
   if (e.met) {
@@ -515,7 +580,9 @@ export async function saveEntry(userId, date, e) {
         response_key: RESPONSE_KEYS[feel],
       }));
     if (responses.length) {
-      const { error: responseError } = await supabase.from('encounter_responses').insert(responses);
+      const { error: responseError } = await supabase
+        .from('encounter_responses')
+        .insert(responses);
       if (responseError) throw responseError;
     }
   }
@@ -626,51 +693,101 @@ export async function adminOverview() {
 
 export async function adminResearchDataset() {
   const queries = await Promise.all([
-    supabase.from('profiles')
-      .select('id,nickname,gender,cohort,role,subscribed,is_anonymous,converted_at,research_consent,research_consent_at,created_at,analysis_id')
+    supabase
+      .from('profiles')
+      .select(
+        'id,nickname,gender,cohort,role,subscribed,is_anonymous,converted_at,research_consent,research_consent_at,created_at,analysis_id',
+      )
       .order('created_at'),
-    supabase.from('entries')
-      .select('id,user_id,local_date,tz,surge,no_stillness,day_note,created_at,updated_at')
+    supabase
+      .from('entries')
+      .select(
+        'id,user_id,local_date,tz,surge,no_stillness,day_note,created_at,updated_at',
+      )
       .order('local_date', { ascending: false }),
-    supabase.from('promises')
-      .select('id,user_id,month,text_raw,vessel_key,target_minutes,position,is_active,created_at')
+    supabase
+      .from('promises')
+      .select(
+        'id,user_id,month,text_raw,vessel_key,target_minutes,position,is_active,created_at',
+      )
       .order('month', { ascending: false }),
-    supabase.from('entry_promise_checks')
+    supabase
+      .from('entry_promise_checks')
       .select('entry_id,user_id,promise_id,done,minutes'),
-    supabase.from('entry_sensations')
+    supabase
+      .from('entry_sensations')
       .select('id,entry_id,user_id,category,option_key,text_raw'),
-    supabase.from('encounters')
-      .select('id,entry_id,user_id,text_raw,minutes,vessel_key,position,created_at')
+    supabase
+      .from('encounters')
+      .select(
+        'id,entry_id,user_id,text_raw,minutes,vessel_key,position,created_at',
+      )
       .order('created_at', { ascending: false }),
-    supabase.from('encounter_responses')
+    supabase
+      .from('encounter_responses')
       .select('encounter_id,user_id,response_key'),
-    supabase.from('survey_responses')
+    supabase
+      .from('survey_responses')
       .select('user_id,survey_key,answers,created_at')
       .order('created_at', { ascending: false }),
     supabase.from('v_forecast_score').select('user_id,date,score'),
-    supabase.from('forecast_day_events').select('user_id,date,event_type,event_note'),
+    supabase
+      .from('forecast_day_events')
+      .select('user_id,date,event_type,event_note'),
     supabase.from('forecast_event_types').select('key,label_ko'),
   ]);
-  const [profiles, entries, promises, checks, sensations, encounters, responses, surveys, forecastScores, forecastEvents, forecastTypes] = queries.map((result) => {
+  const [
+    profiles,
+    entries,
+    promises,
+    checks,
+    sensations,
+    encounters,
+    responses,
+    surveys,
+    forecastScores,
+    forecastEvents,
+    forecastTypes,
+  ] = queries.map((result) => {
     if (result.error) throw result.error;
     return result.data || [];
   });
 
-  const profileById = Object.fromEntries(profiles.map((profile) => [profile.id, profile]));
+  const profileById = Object.fromEntries(
+    profiles.map((profile) => [profile.id, profile]),
+  );
   const checksByEntry = {};
-  checks.forEach((check) => { (checksByEntry[check.entry_id] ||= []).push(check); });
+  checks.forEach((check) => {
+    (checksByEntry[check.entry_id] ||= []).push(check);
+  });
   const sensationsByEntry = {};
-  sensations.forEach((sensation) => { (sensationsByEntry[sensation.entry_id] ||= []).push(sensation); });
+  sensations.forEach((sensation) => {
+    (sensationsByEntry[sensation.entry_id] ||= []).push(sensation);
+  });
   const encountersByEntry = {};
-  encounters.forEach((encounter) => { (encountersByEntry[encounter.entry_id] ||= []).push(encounter); });
+  encounters.forEach((encounter) => {
+    (encountersByEntry[encounter.entry_id] ||= []).push(encounter);
+  });
   const responsesByEncounter = {};
-  responses.forEach((response) => { (responsesByEncounter[response.encounter_id] ||= []).push(RESPONSE_LABELS[response.response_key] || response.response_key); });
+  responses.forEach((response) => {
+    (responsesByEncounter[response.encounter_id] ||= []).push(
+      RESPONSE_LABELS[response.response_key] || response.response_key,
+    );
+  });
   const surveysByKey = {};
-  surveys.forEach((survey) => { surveysByKey[`${survey.user_id}:${survey.survey_key}`] = survey; });
+  surveys.forEach((survey) => {
+    surveysByKey[`${survey.user_id}:${survey.survey_key}`] = survey;
+  });
   const promisesByUser = {};
-  promises.forEach((promise) => { (promisesByUser[promise.user_id] ||= []).push(promise); });
-  const forecastByDay = Object.fromEntries(forecastScores.map((row) => [`${row.user_id}:${row.date}`, row.score]));
-  const forecastLabels = Object.fromEntries(forecastTypes.map((row) => [row.key, row.label_ko]));
+  promises.forEach((promise) => {
+    (promisesByUser[promise.user_id] ||= []).push(promise);
+  });
+  const forecastByDay = Object.fromEntries(
+    forecastScores.map((row) => [`${row.user_id}:${row.date}`, row.score]),
+  );
+  const forecastLabels = Object.fromEntries(
+    forecastTypes.map((row) => [row.key, row.label_ko]),
+  );
   const eventsByDay = {};
   forecastEvents.forEach((row) => {
     (eventsByDay[`${row.user_id}:${row.date}`] ||= []).push({
@@ -680,24 +797,33 @@ export async function adminResearchDataset() {
   });
 
   const detailedEntries = entries.map((entry) => {
-    const monthlyPromises = (promisesByUser[entry.user_id] || []).filter((promise) => promise.month === `${entry.local_date.slice(0, 7)}-01`);
+    const monthlyPromises = (promisesByUser[entry.user_id] || []).filter(
+      (promise) => promise.month === `${entry.local_date.slice(0, 7)}-01`,
+    );
     const entryChecks = checksByEntry[entry.id] || [];
-    const entryEncounters = (encountersByEntry[entry.id] || []).map((encounter) => ({
-      ...encounter,
-      responses: responsesByEncounter[encounter.id] || [],
-    }));
+    const entryEncounters = (encountersByEntry[entry.id] || []).map(
+      (encounter) => ({
+        ...encounter,
+        responses: responsesByEncounter[encounter.id] || [],
+      }),
+    );
     return {
       ...entry,
       nickname: profileById[entry.user_id]?.nickname || '알 수 없음',
-      forecastScore: forecastByDay[`${entry.user_id}:${entry.local_date}`] ?? null,
+      forecastScore:
+        forecastByDay[`${entry.user_id}:${entry.local_date}`] ?? null,
       forecastEvents: eventsByDay[`${entry.user_id}:${entry.local_date}`] || [],
       sensations: sensationsByEntry[entry.id] || [],
       encounters: entryEncounters,
       promises: monthlyPromises.map((promise) => ({
         ...promise,
-        done: entryChecks.some((check) => check.promise_id === promise.id && check.done),
+        done: entryChecks.some(
+          (check) => check.promise_id === promise.id && check.done,
+        ),
       })),
-      observation: surveysByKey[`${entry.user_id}:daily:${entry.local_date}`]?.answers || null,
+      observation:
+        surveysByKey[`${entry.user_id}:daily:${entry.local_date}`]?.answers ||
+        null,
     };
   });
 

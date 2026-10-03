@@ -28,19 +28,19 @@ auth.users.id = public.profiles.id
 
 ## 2. 사용자가 입력하는 데이터와 저장 테이블
 
-| 입력/행동                    | 저장 테이블과 주요 컬럼                                           | 연결 키                                                            |
-| ---------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------ |
-| 이번 달 고요 약속            | `promises.text_raw`, `month`, `position`, `is_active`             | `promises.user_id -> profiles.id`                                  |
+| 입력/행동                       | 저장 테이블과 주요 컬럼                                           | 연결 키                                                            |
+| ------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------ |
+| 이번 달 고요 약속               | `promises.text_raw`, `month`, `position`, `is_active`             | `promises.user_id -> profiles.id`                                  |
 | 날짜별 일정 예보 유형/기타 설명 | `forecast_day_events.date`, `event_type`, `event_note`            | `user_id -> profiles.id`, `event_type -> forecast_event_types.key` |
-| 사용자가 선택한 급증도       | `forecasts.date`, `level` (0–4)                                  | `user_id -> profiles.id`; 화면 점수는 `level × 25%`                |
-| 실제 몰아침과 상황 메모      | `entries.surge`, `day_note`, `no_stillness`, `local_date`, `tz`   | `entries.user_id -> profiles.id`                                   |
-| 그날 지킨 약속               | `entry_promise_checks.done`, `minutes`                            | `entry_id -> entries.id`, `promise_id -> promises.id`              |
-| 몸 감각 태그                 | `entry_sensations.category`, `option_key` 또는 `text_raw`         | `entry_id -> entries.id`                                           |
-| 뜻밖에 찾아온 고요           | `encounters.text_raw`, `minutes`, 선택적 `vessel_key`             | `entry_id -> entries.id`                                           |
-| 고요 뒤 몸의 응답            | `encounter_responses.response_key`                                | `encounter_id -> encounters.id`                                    |
-| 오늘 필요한 변화/니즈/해결감 | `survey_responses.answers` JSONB, `survey_key = daily:YYYY-MM-DD` | `survey_responses.user_id -> profiles.id`                          |
-| 주간 회고                    | `weekly_reviews.note`, `week_start`, `share_with_group`           | `weekly_reviews.user_id -> profiles.id`                            |
-| 제품 사용 이벤트             | `events.name`, `props`, `occurred_at`                             | `events.user_id -> profiles.id`                                    |
+| 사용자가 선택한 급증도          | `forecasts.date`, `level` (0–4)                                   | `user_id -> profiles.id`; 화면 점수는 `level × 25%`                |
+| 실제 몰아침과 상황 메모         | `entries.surge`, `day_note`, `no_stillness`, `local_date`, `tz`   | `entries.user_id -> profiles.id`                                   |
+| 그날 지킨 약속                  | `entry_promise_checks.done`, `minutes`                            | `entry_id -> entries.id`, `promise_id -> promises.id`              |
+| 몸 감각 태그                    | `entry_sensations.category`, `option_key` 또는 `text_raw`         | `entry_id -> entries.id`                                           |
+| 뜻밖에 찾아온 고요              | `encounters.text_raw`, `minutes`, 선택적 `vessel_key`             | `entry_id -> entries.id`                                           |
+| 고요 뒤 몸의 응답               | `encounter_responses.response_key`                                | `encounter_id -> encounters.id`                                    |
+| 오늘 필요한 변화/니즈/해결감    | `survey_responses.answers` JSONB, `survey_key = daily:YYYY-MM-DD` | `survey_responses.user_id -> profiles.id`                          |
+| 주간 회고                       | `weekly_reviews.note`, `week_start`, `share_with_group`           | `weekly_reviews.user_id -> profiles.id`                            |
+| 제품 사용 이벤트                | `events.name`, `props`, `occurred_at`                             | `events.user_id -> profiles.id`                                    |
 
 `settings`에는 테마·알림 시각 등 UI 설정을 저장합니다. 분석 대상인 일일 관찰은 `settings`에 넣지 않습니다.
 
@@ -61,7 +61,7 @@ auth.users.id = public.profiles.id
 | `encounters.created_at` (`timestamptz`)       | `encounters`          | 찾아온 고요 행을 DB에 기록한 시각. 소속 `entry_id`를 따라가면 해당 현지 기록 날짜를 알 수 있음 |
 | `promises.month` (`date`)                     | `promises`            | 약속이 적용되는 달의 1일. 예: `2026-10-01`                                                     |
 | `forecast_day_events.date` (`date`)           | `forecast_day_events` | 일정이 예상되는 미래/당일 날짜                                                                 |
-| `forecasts.date` (`date`)                     | `forecasts`           | 급증도 선택 날짜. `level` 0–4를 저장하고 뷰가 0/25/50/75/100%로 계산                       |
+| `forecasts.date` (`date`)                     | `forecasts`           | 급증도 선택 날짜. `level` 0–4를 저장하고 뷰가 0/25/50/75/100%로 계산                           |
 | `survey_responses.created_at` (`timestamptz`) | `survey_responses`    | 설문 답변을 최초 저장한 시각. 일별 답변 날짜는 `survey_key`에도 포함                           |
 | `events.occurred_at` (`timestamptz`)          | `events`              | 제품 이벤트가 실제 발생했다고 기록한 시각                                                      |
 | `weekly_reviews.week_start` (`date`)          | `weekly_reviews`      | 회고가 가리키는 주의 시작 날짜. 화면 날짜 계산은 현재 일요일 시작 기준                         |

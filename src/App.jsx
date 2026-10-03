@@ -165,7 +165,12 @@ export default function App() {
           level * 25,
         ]),
       );
-      setJournal((j) => ({ ...j, forecastEvents, forecastEventNotes, forecast: score }));
+      setJournal((j) => ({
+        ...j,
+        forecastEvents,
+        forecastEventNotes,
+        forecast: score,
+      }));
       if (profile)
         await store.saveForecastCalendar(
           profile.id,
@@ -180,7 +185,10 @@ export default function App() {
 
   const setForecastLevel = useCallback(
     async (date, level) => {
-      const forecastLevels = { ...journalRef.current.forecastLevels, [date]: level };
+      const forecastLevels = {
+        ...journalRef.current.forecastLevels,
+        [date]: level,
+      };
       const forecast = { ...journalRef.current.forecast, [date]: level * 25 };
       setJournal((j) => ({ ...j, forecastLevels, forecast }));
       if (profile)

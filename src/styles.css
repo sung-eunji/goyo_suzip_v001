@@ -1062,11 +1062,24 @@ textarea {
   font-weight: 600;
 }
 @media (max-width: 520px) {
-  .locked-page { padding: 17px; }
-  .locked-heading { flex-direction: column; gap: 8px; }
-  .locked-preview { min-height: 242px; }
-  .week-preview-art, .chart-preview-art { padding: 12px; }
-  .preview-stats { gap: 10px; font-size: 10px; }
+  .locked-page {
+    padding: 17px;
+  }
+  .locked-heading {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .locked-preview {
+    min-height: 242px;
+  }
+  .week-preview-art,
+  .chart-preview-art {
+    padding: 12px;
+  }
+  .preview-stats {
+    gap: 10px;
+    font-size: 10px;
+  }
 }
 
 .savebar {
@@ -1291,7 +1304,10 @@ textarea {
   font-family: inherit;
   font-size: 13px;
   font-weight: 500;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    color 0.15s;
 }
 .forecast-event-button:hover {
   border-color: var(--surge);
@@ -1764,8 +1780,12 @@ table.dtable td {
   color: var(--ink);
 }
 @media (max-width: 760px) {
-  .admin-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .admin-analysis-grid { grid-template-columns: 1fr; }
+  .admin-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .admin-analysis-grid {
+    grid-template-columns: 1fr;
+  }
 }
 .gaugetop .surge-value {
   width: 92px;
