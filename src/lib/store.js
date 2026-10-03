@@ -68,7 +68,10 @@ export async function registerAccount({
   const { data, error } = await supabase.auth.signUp({
     email: email.trim().toLowerCase(),
     password,
-    options: { data: { nickname: cleanNickname, gender } },
+    options: {
+      data: { nickname: cleanNickname, gender },
+      emailRedirectTo: window.location.origin,
+    },
   });
   if (error) throw error;
   return data;
@@ -82,6 +85,19 @@ export async function login(email, password, remember = true) {
   });
   if (error) throw error;
   return data.user;
+}
+
+export async function sendPasswordReset(email, redirectTo) {
+  const { error } = await supabase.auth.resetPasswordForEmail(
+    email.trim().toLowerCase(),
+    { redirectTo },
+  );
+  if (error) throw error;
+}
+
+export async function updatePassword(password) {
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) throw error;
 }
 
 // 익명 계정 → 정식 계정 전환 (같은 user id 유지 → 기록 보존)

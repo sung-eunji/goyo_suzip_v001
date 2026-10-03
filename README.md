@@ -18,10 +18,7 @@ React + Vite + Supabase. 외부 참가자 누구나 가입 없이 시작 → 나
 
 1. https://supabase.com → 새 프로젝트 생성 (이미 계정 있음).
 2. **SQL Editor** → `supabase/schema.sql` 내용을 실행합니다. 테이블, 관계, RLS, 함수, 트리거, 분석 뷰와 기준 선택지가 생성됩니다.
-3. **Authentication → Providers → Email**: 그대로 켜둔 채,
-   - **Anonymous sign-ins** 를 **켭니다** (가입 없이 시작을 위해 필수).
-   - 파일럿에서 전환을 매끄럽게 하려면 **"Confirm email"(이메일 인증)** 을 꺼두는 걸 권장
-     (Authentication → Sign In / Providers 또는 Email 설정). 켜두면 익명→정식 전환 시 인증 메일이 갑니다.
+3. **Authentication → Providers → Email**을 켭니다. 이메일 인증을 켜두면 회원가입 뒤 인증 메일이 발송됩니다. 실제 메일 발송 테스트/운영에는 사용자 지정 SMTP 설정을 권장합니다.
 4. **Project Settings → API** 에서 `Project URL` 과 `anon public` 키를 복사.
 
 ## 3. 로컬 실행
@@ -31,6 +28,27 @@ cp .env.example .env      # 그리고 .env 안에 URL / anon key 붙여넣기
 npm install
 npm run dev               # http://localhost:5173
 ```
+
+### 2주 실험실 빌드
+
+Slack 파일럿은 `develop` 브랜치에서 pilot 잠금을 켭니다. 주/흐름 탭은 흐릿한 미리보기와 “곧 런칭”을 표시하고, 오늘/이번 달만 실제 이용할 수 있습니다.
+
+```bash
+npm run dev:pilot
+npm run build:pilot
+```
+
+배포 서비스에서 `develop` 브랜치의 build command는 `npm run build:pilot`, 구매 체험용 `main` 브랜치는 `npm run build`로 설정하세요. `develop`은 `.env.pilot`의 `VITE_PILOT_MODE=true`로 주/흐름을 잠급니다. 같은 Supabase DB를 사용해도 pilot build에서는 구독 상태와 관계없이 잠깁니다.
+
+### 이메일 확인·비밀번호 재설정 URL
+
+Supabase 대시보드의 **Authentication → URL Configuration**에서 다음을 설정합니다.
+
+- **Site URL**: `http://localhost:5173`
+- **Redirect URLs**에 추가: `http://localhost:5173/**`
+- `127.0.0.1` 주소로 앱을 열 때도 있으므로 추가: `http://127.0.0.1:5173/**`
+
+앱의 비밀번호 재설정 기능은 현재 브라우저 주소를 redirect URL로 전달합니다. 이미 `localhost:3000`으로 발송된 메일 링크는 목적지가 바뀌지 않으므로, URL 설정 후 앱 로그인 화면의 **비밀번호를 잊으셨나요?**에서 새 메일을 요청하세요.
 
 ## 4. 관리자(나) 지정 + 구독 열기
 
@@ -77,9 +95,9 @@ supabase/schema.sql     테이블 + RLS + Auth/보호 트리거 + 분석 뷰
 
 ## 온보딩·과금 모델
 
-1. **회원가입** — 이메일, 성별, 닉네임, 비밀번호를 입력합니다. 이메일이 인증되면 등록한 이메일로 로그인합니다.
+1. **회원가입** — 이메일, 성별, 닉네임, 비밀번호를 입력합니다. 이메일 인증이 켜져 있으면 인증 후 등록한 이메일로 로그인합니다.
 2. **로그인** — 이메일과 비밀번호를 사용합니다. 로그인 후 앱은 프로필 닉네임으로 인사합니다.
-3. **다른 브라우저에서 이어보기** — 기존 계정의 이메일/비밀번호로 로그인합니다. 닉네임만으로 기존 계정에 로그인하지 않습니다.
+3. **2주 실험실** — Slack 참가자는 `develop` pilot build를 사용합니다. 오늘·이번 달은 기록 가능하고, 이번 주·흐름은 미리보기와 곧 출시 안내를 표시합니다.
 4. **구독** — 무료는 오늘·이번 달. 돌아보기(이번 주·흐름)는 `subscribed`가 true여야 열림.
 
 ### 사용자 식별 규칙

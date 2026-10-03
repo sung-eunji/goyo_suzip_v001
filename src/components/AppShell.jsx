@@ -11,6 +11,7 @@ import AdminPage from '../pages/AdminPage';
 
 const EMAILRE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const FREE = new Set(['day', 'month', 'guide']);
+const PILOT_MODE = import.meta.env.VITE_PILOT_MODE === 'true';
 
 function dailyMessage(userId) {
   const today = iso(new Date());
@@ -52,7 +53,11 @@ export default function AppShell({
   if (profile.role === 'admin')
     tabs.push({ k: 'admin', label: '관리자', sub: '전체' });
 
-  const locked = !FREE.has(tab) && tab !== 'admin' && !subscribed;
+  const isReviewTab = tab === 'week' || tab === 'chart';
+  const locked =
+    !FREE.has(tab) &&
+    tab !== 'admin' &&
+    (PILOT_MODE && isReviewTab ? true : !subscribed);
 
   return (
     <div className="wrap" style={{ paddingTop: 0 }}>
@@ -99,7 +104,7 @@ export default function AppShell({
       </nav>
 
       {locked ? (
-        <LockedPage tab={tab} />
+        <LockedPage tab={tab} pilot={PILOT_MODE} />
       ) : (
         <>
           {tab === 'day' && (
@@ -110,7 +115,7 @@ export default function AppShell({
           )}
           {tab === 'week' && <WeekPage journal={journal} today={today} />}
           {tab === 'chart' && <ChartPage journal={journal} today={today} />}
-          {tab === 'guide' && <GuidePage api={api} />}
+          {tab === 'guide' && <GuidePage />}
           {tab === 'admin' && profile.role === 'admin' && <AdminPage />}
         </>
       )}

@@ -9,8 +9,8 @@ const GENDERS = [
   ['prefer_not_to_say', '응답 안 함'],
 ];
 
-export default function Auth({ onEntered }) {
-  const [view, setView] = useState('welcome');
+export default function Auth({ onEntered, initialView = 'welcome' }) {
+  const [view, setView] = useState(initialView);
   const [email, setEmail] = useState('');
   const [nickname, setNickname] = useState('');
   const [gender, setGender] = useState('');
@@ -58,12 +58,19 @@ export default function Auth({ onEntered }) {
         setView('confirmation');
       }
     } catch (e) {
-      setError(
-        e.code === 'NICKNAME_TAKEN' || e.code === '23505'
-          ? '이미 사용 중인 닉네임이에요. 다른 닉네임을 선택해주세요.'
-          : e.message ||
-              '회원가입을 완료하지 못했어요. 잠시 후 다시 시도해주세요.',
-      );
+      const message = e.message?.toLowerCase() || '';
+      if (e.code === 'NICKNAME_TAKEN' || e.code === '23505') {
+        setError('이미 사용 중인 닉네임이에요. 다른 닉네임을 선택해주세요.');
+      } else if (message.includes('rate limit')) {
+        setError(
+          '확인 이메일 발송 한도에 도달했어요. 잠시 기다린 뒤 다시 시도하거나 Supabase 관리자에게 이메일 발송 설정을 확인해달라고 요청해주세요.',
+        );
+      } else {
+        setError(
+          e.message ||
+            '회원가입을 완료하지 못했어요. 잠시 후 다시 시도해주세요.',
+        );
+      }
     } finally {
       setBusy(false);
     }
@@ -81,6 +88,55 @@ export default function Auth({ onEntered }) {
       await onEntered();
     } catch {
       setError('이메일 또는 비밀번호가 맞지 않아요.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function requestPasswordReset(event) {
+    event.preventDefault();
+    if (!EMAIL_RE.test(email.trim()))
+      return setError('가입한 이메일 주소를 입력해주세요.');
+    setBusy(true);
+    setError('');
+    try {
+      await store.sendPasswordReset(
+        email,
+        `${window.location.origin}/?auth=recovery`,
+      );
+      setView('reset-sent');
+    } catch (e) {
+      const message = e.message?.toLowerCase() || '';
+      setError(
+        message.includes('rate limit')
+          ? '재설정 이메일 발송 한도에 도달했어요. 잠시 기다린 뒤 다시 요청해주세요.'
+          : e.message || '재설정 이메일을 보내지 못했어요.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveNewPassword(event) {
+    event.preventDefault();
+    if (!PASSWORD_RE.test(password)) {
+      return setError(
+        '비밀번호는 8자 이상이며 대문자, 소문자, 숫자, 특수문자를 각각 포함해야 해요.',
+      );
+    }
+    if (password !== passwordConfirm)
+      return setError('비밀번호가 서로 일치하지 않아요.');
+    setBusy(true);
+    setError('');
+    try {
+      await store.updatePassword(password);
+      window.history.replaceState({}, document.title, window.location.pathname);
+      await onEntered();
+    } catch (e) {
+      setError(
+        e.message ||
+          '비밀번호를 변경하지 못했어요. 재설정 링크가 만료됐을 수 있습니다.',
+      );
     } finally {
       setBusy(false);
     }
@@ -256,6 +312,15 @@ export default function Auth({ onEntered }) {
               <button
                 type="button"
                 className="linkbtn"
+                onClick={() => switchView('forgot-password')}
+              >
+                비밀번호를 잊으셨나요?
+              </button>
+            </p>
+            <p className="switchline">
+              <button
+                type="button"
+                className="linkbtn"
                 onClick={() => switchView('register')}
               >
                 회원가입
@@ -284,6 +349,93 @@ export default function Auth({ onEntered }) {
               로그인으로 이동
             </button>
           </div>
+        )}
+
+        {view === 'forgot-password' && (
+          <form onSubmit={requestPasswordReset}>
+            <h2 className="serif" style={{ fontSize: 20, margin: '0 0 16px' }}>
+              비밀번호 재설정
+            </h2>
+            <p className="lead">가입한 이메일로 재설정 링크를 보내드릴게요.</p>
+            <div className="fld">
+              <label htmlFor="reset-email">이메일</label>
+              <input
+                id="reset-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
+                required
+              />
+            </div>
+            <button className="authbtn" type="submit" disabled={busy}>
+              {busy ? '보내는 중…' : '재설정 이메일 보내기'}
+            </button>
+            <p className="switchline">
+              <button
+                type="button"
+                className="linkbtn"
+                onClick={() => switchView('login')}
+              >
+                ← 로그인
+              </button>
+            </p>
+          </form>
+        )}
+
+        {view === 'reset-sent' && (
+          <div>
+            <h2 className="serif" style={{ fontSize: 20 }}>
+              이메일을 확인해주세요
+            </h2>
+            <p className="lead">
+              비밀번호 재설정 링크를 보냈어요. 메일의 링크를 이 브라우저에서
+              열어 새 비밀번호를 입력해주세요.
+            </p>
+            <button className="authbtn" onClick={() => switchView('login')}>
+              로그인으로 이동
+            </button>
+          </div>
+        )}
+
+        {view === 'recovery' && (
+          <form onSubmit={saveNewPassword}>
+            <h2 className="serif" style={{ fontSize: 20, margin: '0 0 16px' }}>
+              새 비밀번호 설정
+            </h2>
+            <div className="fld">
+              <label htmlFor="recovery-password">
+                새 비밀번호{' '}
+                <span className="muted">
+                  · 8자+, 대문자·소문자·숫자·특수문자
+                </span>
+              </label>
+              <input
+                id="recovery-password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="new-password"
+                required
+              />
+            </div>
+            <div className="fld">
+              <label htmlFor="recovery-password-confirm">
+                새 비밀번호 확인
+              </label>
+              <input
+                id="recovery-password-confirm"
+                type="password"
+                value={passwordConfirm}
+                onChange={(e) => setPasswordConfirm(e.target.value)}
+                autoComplete="new-password"
+                required
+              />
+            </div>
+            <button className="authbtn" type="submit" disabled={busy}>
+              {busy ? '저장 중…' : '비밀번호 변경하기'}
+            </button>
+          </form>
         )}
       </div>
     </div>
