@@ -62,7 +62,7 @@ export default function AppShell({
         </div>
         {isAnon && (
           <button className="convertbtn" onClick={() => setConvertOpen(true)}>
-            가입하고 기록 지키기
+            다른 브라우저에서 기록 이어보기 · 회원가입하기
           </button>
         )}
         <button
@@ -140,6 +140,7 @@ export default function AppShell({
 function ConvertModal({ onClose, onDone }) {
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
+  const [pwConfirm, setPwConfirm] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   async function go() {
@@ -147,8 +148,14 @@ function ConvertModal({ onClose, onDone }) {
       setErr('이메일 형식을 확인해주세요.');
       return;
     }
-    if (!pw || pw.length < 6) {
-      setErr('비밀번호는 6자 이상이에요.');
+    if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9\s]).{8,}$/.test(pw)) {
+      setErr(
+        '비밀번호는 8자 이상이며 대문자, 소문자, 숫자, 특수문자를 각각 포함해야 해요.',
+      );
+      return;
+    }
+    if (pw !== pwConfirm) {
+      setErr('비밀번호가 서로 일치하지 않아요.');
       return;
     }
     setBusy(true);
@@ -169,10 +176,10 @@ function ConvertModal({ onClose, onDone }) {
     >
       <div className="modalcard">
         {err && <div className="autherr">{err}</div>}
-        <h3 className="serif">기록을 지켜요</h3>
+        <h3 className="serif">다른 브라우저에서 기록 이어보기</h3>
         <p>
-          이메일과 비밀번호를 더하면, 다음에 어느 기기에서든 이 기록을 다시 볼
-          수 있어요. 지금까지 쓴 기록은 그대로 유지돼요.
+          이메일을 연결하면 현재 브라우저의 기록을 다른 기기에서도 이어볼 수
+          있어요.
         </p>
         <div className="fld">
           <label>이메일</label>
@@ -187,15 +194,26 @@ function ConvertModal({ onClose, onDone }) {
           <label>
             비밀번호{' '}
             <span className="muted" style={{ fontWeight: 400 }}>
-              · 6자 이상
+              · 8자 이상, 대문자·소문자·숫자·특수문자 포함
             </span>
           </label>
           <input
             type="password"
             value={pw}
             onChange={(e) => setPw(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && go()}
             placeholder="비밀번호"
+            autoComplete="new-password"
+          />
+        </div>
+        <div className="fld">
+          <label>비밀번호 확인</label>
+          <input
+            type="password"
+            value={pwConfirm}
+            onChange={(e) => setPwConfirm(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && go()}
+            placeholder="비밀번호를 다시 입력"
+            autoComplete="new-password"
           />
         </div>
         <div className="modalrow">
@@ -205,7 +223,7 @@ function ConvertModal({ onClose, onDone }) {
             disabled={busy}
             onClick={go}
           >
-            {busy ? '잠시만요…' : '가입하고 지키기'}
+            {busy ? '잠시만요…' : '이메일 연결하고 기록 지키기'}
           </button>
           <button className="btn ghost" onClick={onClose}>
             나중에

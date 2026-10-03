@@ -18,11 +18,26 @@ export function nicknameKey(nickname) {
   return nickname.trim().toLocaleLowerCase('ko-KR').replace(/\s+/g, ' ');
 }
 
+export async function isNicknameAvailable(nickname) {
+  const { data, error } = await supabase.rpc('is_nickname_available', {
+    p_nickname: nickname.trim(),
+  });
+  if (error) throw error;
+  return data === true;
+}
+
 /* ---------------- 인증 ---------------- */
 
 // 가입 없이 시작 (익명 로그인) + 프로필 생성
 export async function startAnon(nickname, remember = true) {
   setRemember(remember);
+  if (!(await isNicknameAvailable(nickname))) {
+    const error = new Error(
+      '이미 사용 중인 닉네임이에요. 기존 계정으로 로그인해주세요.',
+    );
+    error.code = 'NICKNAME_TAKEN';
+    throw error;
+  }
   const { data, error } = await supabase.auth.signInAnonymously();
   if (error) throw error;
   try {
@@ -32,6 +47,31 @@ export async function startAnon(nickname, remember = true) {
     throw profileError;
   }
   return data.user;
+}
+
+export async function registerAccount({
+  email,
+  password,
+  nickname,
+  gender,
+  remember = true,
+}) {
+  setRemember(remember);
+  const cleanNickname = nickname.trim();
+  if (!(await isNicknameAvailable(cleanNickname))) {
+    const error = new Error(
+      '이미 사용 중인 닉네임이에요. 다른 닉네임을 선택해주세요.',
+    );
+    error.code = 'NICKNAME_TAKEN';
+    throw error;
+  }
+  const { data, error } = await supabase.auth.signUp({
+    email: email.trim().toLowerCase(),
+    password,
+    options: { data: { nickname: cleanNickname, gender } },
+  });
+  if (error) throw error;
+  return data;
 }
 
 export async function login(email, password, remember = true) {
@@ -165,36 +205,36 @@ export async function fetchJournal(userId) {
   const forecast = Object.fromEntries(
     Object.entries(forecastEvents).map(([date, types]) => [
       date,
-      Math.min(100, types.reduce((sum, t) => sum + (weightByType[t] || 0), 0)),
+      Math.min(
+        100,
+        types.reduce((sum, t) => sum + (weightByType[t] || 0), 0),
+      ),
     ]),
   );
   const map = {};
   const entryIds = (entries || []).map((e) => e.id);
-  const [
-    { data: checks },
-    { data: sensations },
-    { data: encounters },
-  ] = await Promise.all([
-    entryIds.length
-      ? supabase
-          .from('entry_promise_checks')
-          .select('entry_id,promise_id,done')
-          .in('entry_id', entryIds)
-      : { data: [] },
-    entryIds.length
-      ? supabase
-          .from('entry_sensations')
-          .select('entry_id,category,option_key,text_raw')
-          .in('entry_id', entryIds)
-      : { data: [] },
-    entryIds.length
-      ? supabase
-          .from('encounters')
-          .select('id,entry_id,text_raw,minutes')
-          .in('entry_id', entryIds)
-          .order('position')
-      : { data: [] },
-  ]);
+  const [{ data: checks }, { data: sensations }, { data: encounters }] =
+    await Promise.all([
+      entryIds.length
+        ? supabase
+            .from('entry_promise_checks')
+            .select('entry_id,promise_id,done')
+            .in('entry_id', entryIds)
+        : { data: [] },
+      entryIds.length
+        ? supabase
+            .from('entry_sensations')
+            .select('entry_id,category,option_key,text_raw')
+            .in('entry_id', entryIds)
+        : { data: [] },
+      entryIds.length
+        ? supabase
+            .from('encounters')
+            .select('id,entry_id,text_raw,minutes')
+            .in('entry_id', entryIds)
+            .order('position')
+        : { data: [] },
+    ]);
   const encounterIds = (encounters || []).map((encounter) => encounter.id);
   const { data: responses } = encounterIds.length
     ? await supabase

@@ -500,6 +500,64 @@ nav.tabs button[aria-selected='true'] .k {
   margin-bottom: 6px;
   font-weight: 500;
 }
+.gender-field {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+}
+.gender-field legend {
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+.gender-options {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.gender-options label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font-size: 14px;
+}
+.gender-options input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.gender-options .radio-mark {
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid var(--line-2);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+}
+.gender-options .radio-mark::after {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: transparent;
+}
+.gender-options label.selected .radio-mark {
+  border-color: var(--surge);
+}
+.gender-options label.selected .radio-mark::after {
+  background: var(--surge);
+}
+.gender-options input:focus-visible + .radio-mark {
+  outline: 2px solid var(--surge);
+  outline-offset: 3px;
+}
 .remember {
   display: flex;
   align-items: center;
@@ -676,6 +734,8 @@ nav.tabs button[aria-selected='true'] .k {
   gap: 10px;
 }
 input[type='text'],
+input[type='email'],
+input[type='password'],
 textarea,
 select {
   width: 100%;

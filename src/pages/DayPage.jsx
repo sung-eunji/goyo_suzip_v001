@@ -50,8 +50,14 @@ export default function DayPage({ journal, api, today }) {
   }, [key, entry]);
 
   const isToday = iso(curDay) === iso(today);
-  const startOfDay = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
-  const daysAgo = Math.round((startOfDay(today) - startOfDay(curDay)) / 86400000);
+  const startOfDay = (d) => {
+    const x = new Date(d);
+    x.setHours(0, 0, 0, 0);
+    return x;
+  };
+  const daysAgo = Math.round(
+    (startOfDay(today) - startOfDay(curDay)) / 86400000,
+  );
   // 3일이 지나면 더 이상 손댈 수 없어요 — 늦게 채운 기록이 이탈·급증일 분석을 왜곡하지 않도록.
   const editable = daysAgo <= 3;
   const shift = (n) => {
@@ -121,7 +127,10 @@ export default function DayPage({ journal, api, today }) {
         </div>
       )}
 
-      <div className="card" style={editable ? undefined : { opacity: 0.55, pointerEvents: 'none' }}>
+      <div
+        className="card"
+        style={editable ? undefined : { opacity: 0.55, pointerEvents: 'none' }}
+      >
         <div className="eyebrow" style={{ marginBottom: 14 }}>
           ① 몰아침 게이지
         </div>
