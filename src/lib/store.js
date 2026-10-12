@@ -683,10 +683,31 @@ export async function removeChallengeParticipant(
   if (error) throw error;
 }
 
+function challengeAudioObjectPath(storagePath) {
+  const value = String(storagePath || '').trim();
+  if (!value) throw new Error('오디오 파일 경로가 비어 있어요.');
+
+  if (/^https?:\/\//i.test(value)) {
+    const url = new URL(value);
+    const match = url.pathname.match(
+      /\/storage\/v1\/object\/(?:public|sign|authenticated)\/challenge-audio\/(.+)$/,
+    );
+    if (!match) {
+      throw new Error('challenge-audio 버킷의 파일 링크가 아니에요.');
+    }
+    return decodeURIComponent(match[1]);
+  }
+
+  const path = value.replace(/^\/+/, '');
+  return path.startsWith('challenge-audio/')
+    ? path.slice('challenge-audio/'.length)
+    : path;
+}
+
 export async function createChallengeAudioUrl(storagePath) {
   const { data, error } = await supabase.storage
     .from('challenge-audio')
-    .createSignedUrl(storagePath, 60 * 60);
+    .createSignedUrl(challengeAudioObjectPath(storagePath), 60 * 60);
   if (error) throw error;
   return data.signedUrl;
 }

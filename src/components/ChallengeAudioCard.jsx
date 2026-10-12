@@ -66,6 +66,9 @@ export default function ChallengeAudioCard({ dateKey, onChallengeWindow }) {
     setGuide(null);
     setSignedUrl('');
     setFileReady(false);
+    setDuration(0);
+    setPosition(0);
+    setPlaying(false);
     setMessage('');
     if (PREVIEW_MODE) {
       onChallengeWindow(null);
@@ -116,7 +119,13 @@ export default function ChallengeAudioCard({ dateKey, onChallengeWindow }) {
           ? Math.max(1, Math.min(details.duration_days, requestedDay))
           : requestedDay;
         const selectedAudio = rows.find(
-          (row) => row.day_number === selectedDay,
+          (row) =>
+            row.day_number === selectedDay &&
+            (details.viewer_is_admin ||
+              (row.audio_title !== 'TODO' &&
+                !/^goyo-stillness-2week-20261013\/day\d+\.mp3$/i.test(
+                  row.storage_path || '',
+                ))),
         );
         const recordEndDate =
           details.record_end_date ||
@@ -137,8 +146,13 @@ export default function ChallengeAudioCard({ dateKey, onChallengeWindow }) {
               setSignedUrl(url);
               setFileReady(true);
             }
-          } catch {
-            if (!cancelled) setFileReady(false);
+          } catch (error) {
+            if (!cancelled) {
+              setFileReady(false);
+              setMessage(
+                error.message || '오디오 파일 경로를 확인해주세요.',
+              );
+            }
           }
         }
       })
@@ -439,16 +453,16 @@ export default function ChallengeAudioCard({ dateKey, onChallengeWindow }) {
                 className="audio-seek"
                 type="range"
                 min="0"
-                max={duration || audio?.duration_sec || 1}
+                max={duration || 1}
                 step="0.1"
-                value={Math.min(position, duration || position)}
+                value={Math.min(position, duration || 0)}
                 onChange={seek}
                 disabled={!fileReady || !duration}
                 aria-label="오디오 재생 위치"
               />
               <div className="audio-time">
                 <span>{timeLabel(position)}</span>
-                <span>{timeLabel(duration || audio?.duration_sec)}</span>
+                <span>{timeLabel(duration)}</span>
               </div>
             </div>
           </div>
