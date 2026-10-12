@@ -705,9 +705,16 @@ function challengeAudioObjectPath(storagePath) {
 }
 
 export async function createChallengeAudioUrl(storagePath) {
+  const value = String(storagePath || '').trim();
+  if (
+    /^https?:\/\//i.test(value) &&
+    /\/storage\/v1\/object\/public\/challenge-audio\//.test(value)
+  ) {
+    return value;
+  }
   const { data, error } = await supabase.storage
     .from('challenge-audio')
-    .createSignedUrl(challengeAudioObjectPath(storagePath), 60 * 60);
+    .createSignedUrl(challengeAudioObjectPath(value), 60 * 60);
   if (error) throw error;
   return data.signedUrl;
 }

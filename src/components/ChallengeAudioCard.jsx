@@ -37,6 +37,23 @@ function requestId() {
   return globalThis.crypto.randomUUID();
 }
 
+function updateMediaPosition(media) {
+  const session = navigator.mediaSession;
+  if (
+    !session?.setPositionState ||
+    !Number.isFinite(media.duration) ||
+    media.duration <= 0
+  )
+    return;
+  try {
+    session.setPositionState({
+      duration: media.duration,
+      playbackRate: media.playbackRate || 1,
+      position: Math.min(media.currentTime, media.duration),
+    });
+  } catch {}
+}
+
 export default function ChallengeAudioCard({ dateKey, onChallengeWindow }) {
   const selectedDate = dateKey;
   const [guide, setGuide] = useState(null);
@@ -119,22 +136,16 @@ export default function ChallengeAudioCard({ dateKey, onChallengeWindow }) {
           ? Math.max(1, Math.min(details.duration_days, requestedDay))
           : requestedDay;
         const selectedAudio = rows.find(
-          (row) =>
-            row.day_number === selectedDay &&
-            (details.viewer_is_admin ||
-              (row.audio_title !== 'TODO' &&
-                !/^goyo-stillness-2week-20261013\/day\d+\.mp3$/i.test(
-                  row.storage_path || '',
-                ))),
+          (row) => row.day_number === selectedDay,
         );
         const recordEndDate =
           details.record_end_date ||
           addDays(details.start_date, details.duration_days - 1);
         setGuide({ ...details, selectedDay, selectedAudio });
         if (
+          selectedDate >= details.start_date &&
           (details.viewer_is_admin ||
-            (selectedDate >= details.start_date &&
-              selectedDate <= recordEndDate &&
+            (selectedDate <= recordEndDate &&
               selectedDate <= details.server_date)) &&
           selectedAudio?.storage_path
         ) {
@@ -149,9 +160,7 @@ export default function ChallengeAudioCard({ dateKey, onChallengeWindow }) {
           } catch (error) {
             if (!cancelled) {
               setFileReady(false);
-              setMessage(
-                error.message || '오디오 파일 경로를 확인해주세요.',
-              );
+              setMessage(error.message || '오디오 파일 경로를 확인해주세요.');
             }
           }
         }
@@ -178,6 +187,71 @@ export default function ChallengeAudioCard({ dateKey, onChallengeWindow }) {
       window.removeEventListener('pagehide', onPageHide);
     };
   }, [guide]);
+
+  useEffect(() => {
+    const session = navigator.mediaSession;
+    const audio = guide?.selectedAudio;
+    if (!session || !fileReady || !audio?.audio_id) return undefined;
+
+    if (window.MediaMetadata) {
+      session.metadata = new window.MediaMetadata({
+        title: audio.audio_title,
+        artist: '고요수집',
+        album: `Day ${guide.selectedDay} · 2주 챌린지`,
+      });
+    }
+    session.playbackState = audioRef.current?.paused ? 'paused' : 'playing';
+
+    const actions = {
+      play: () => audioRef.current?.play().catch(() => {}),
+      pause: () => audioRef.current?.pause(),
+      stop: () => {
+        if (!audioRef.current) return;
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        setPosition(0);
+      },
+      seekbackward: ({ seekOffset = 10 } = {}) => {
+        if (audioRef.current)
+          audioRef.current.currentTime = Math.max(
+            0,
+            audioRef.current.currentTime - seekOffset,
+          );
+      },
+      seekforward: ({ seekOffset = 10 } = {}) => {
+        if (audioRef.current)
+          audioRef.current.currentTime = Math.min(
+            audioRef.current.duration || Infinity,
+            audioRef.current.currentTime + seekOffset,
+          );
+      },
+      seekto: ({ seekTime }) => {
+        if (audioRef.current && Number.isFinite(seekTime))
+          audioRef.current.currentTime = seekTime;
+      },
+    };
+
+    Object.entries(actions).forEach(([action, handler]) => {
+      try {
+        session.setActionHandler(action, handler);
+      } catch {}
+    });
+
+    return () => {
+      Object.keys(actions).forEach((action) => {
+        try {
+          session.setActionHandler(action, null);
+        } catch {}
+      });
+      session.metadata = null;
+      session.playbackState = 'none';
+    };
+  }, [
+    fileReady,
+    guide?.selectedAudio?.audio_id,
+    guide?.selectedAudio?.audio_title,
+    guide?.selectedDay,
+  ]);
 
   function sendEvent(eventType, seconds = 0, atPosition) {
     if (!guide?.is_participant || !guide.selectedAudio?.audio_id) return;
@@ -234,6 +308,7 @@ export default function ChallengeAudioCard({ dateKey, onChallengeWindow }) {
     lastMediaPosition.current = current;
     lastTickAt.current = now;
     setPosition(current);
+    updateMediaPosition(media);
   }
 
   function onPlay() {
@@ -242,6 +317,7 @@ export default function ChallengeAudioCard({ dateKey, onChallengeWindow }) {
     lastTickAt.current = performance.now();
     playingRef.current = true;
     setPlaying(true);
+    if (navigator.mediaSession) navigator.mediaSession.playbackState = 'playing';
     setMessage('');
     sendEvent('play', 0, media?.currentTime || 0);
   }
@@ -254,6 +330,7 @@ export default function ChallengeAudioCard({ dateKey, onChallengeWindow }) {
     lastTickAt.current = 0;
     playingRef.current = false;
     setPlaying(false);
+    if (navigator.mediaSession) navigator.mediaSession.playbackState = 'paused';
     sendEvent('pause', seconds);
   }
 
@@ -266,6 +343,7 @@ export default function ChallengeAudioCard({ dateKey, onChallengeWindow }) {
     lastMediaPosition.current = media.currentTime;
     lastTickAt.current = media.paused ? 0 : performance.now();
     setPosition(media.currentTime);
+    updateMediaPosition(media);
     sendEvent('seek', seconds, media.currentTime);
   }
 
@@ -283,6 +361,7 @@ export default function ChallengeAudioCard({ dateKey, onChallengeWindow }) {
         seconds >=
       Math.ceil((guide.selectedAudio.duration_sec || media.duration) * 0.8);
     setPlaying(false);
+    if (navigator.mediaSession) navigator.mediaSession.playbackState = 'paused';
     setPosition(media.duration || media.currentTime);
     sendEvent('ended', seconds, media.duration || media.currentTime);
     if (guide.is_participant) {
@@ -337,16 +416,13 @@ export default function ChallengeAudioCard({ dateKey, onChallengeWindow }) {
     server_date: serverDate,
   } = guide;
   const endDate = recordEndDate || addDays(startDate, durationDays - 1);
-  if (serverDate < startDate && !guide.viewer_is_admin) {
+  if (selectedDate < startDate) {
     return (
       <section
         className="card challenge-audio-card"
         aria-label="오늘의 몸 가이드"
       >
-        <div className="challenge-audio-heading">오늘의 몸 가이드</div>
-        <p className="challenge-audio-note">
-          {koreanDate(startDate, true)}부터 첫 가이드가 열려요
-        </p>
+        <p className="challenge-audio-note">음원 준비 중이에요.</p>
       </section>
     );
   }
@@ -358,12 +434,15 @@ export default function ChallengeAudioCard({ dateKey, onChallengeWindow }) {
 
   const selectedDay = guide.selectedDay;
   const audio = guide.selectedAudio;
-  if (!audio && !guide.viewer_is_admin) return null;
-  const isFutureDate = selectedDate > serverDate;
-  const isUnlocked =
+  if (!audio && !guide.viewer_is_admin && selectedDay > durationDays)
+    return null;
+  const isDateUnlocked =
+    guide.viewer_is_admin ||
+    (selectedDate <= serverDate && selectedDay <= guide.current_day);
+  const hasRecording =
     !!audio?.storage_path &&
-    (guide.viewer_is_admin ||
-      (!isFutureDate && selectedDay <= guide.current_day));
+    audio.audio_title !== 'TODO' &&
+    !/^goyo-stillness-2week-20261013\/day\d+\.mp3$/i.test(audio.storage_path);
   const resumeAt = audio?.last_position_sec || 0;
   const audioTitle = audio?.audio_title || 'TODO';
 
@@ -372,7 +451,7 @@ export default function ChallengeAudioCard({ dateKey, onChallengeWindow }) {
       className="card challenge-audio-card"
       aria-label="오늘의 몸 가이드"
     >
-      {!isUnlocked ? (
+      {!isDateUnlocked ? (
         <div className="challenge-audio-locked">
           <span className="challenge-audio-lock" aria-hidden="true">
             &#128274;
@@ -407,68 +486,75 @@ export default function ChallengeAudioCard({ dateKey, onChallengeWindow }) {
               {audio?.description && <p>{audio.description}</p>}
             </div>
           )}
-          <div className="audio-player">
-            {fileReady && (
-              <audio
-                ref={audioRef}
-                src={signedUrl}
-                preload="metadata"
-                onLoadedMetadata={(event) => {
-                  const mediaDuration = Number.isFinite(
-                    event.currentTarget.duration,
-                  )
-                    ? event.currentTarget.duration
-                    : audio?.duration_sec || 0;
-                  setDuration(mediaDuration);
-                  if (resumeAt > 0) setPosition(resumeAt);
-                }}
-                onTimeUpdate={onTimeUpdate}
-                onPlay={onPlay}
-                onPause={onPause}
-                onSeeked={onSeeked}
-                onEnded={onEnded}
-                onError={() =>
-                  setMessage(
-                    '오디오 파일을 불러오지 못했어요. 잠시 후 다시 시도해주세요.',
-                  )
-                }
-              />
-            )}
-            <button
-              className="audio-play-button"
-              type="button"
-              onClick={togglePlayback}
-              disabled={busy || !fileReady}
-              aria-label={playing ? '일시정지' : '재생'}
-            >
-              {busy ? '…' : playing ? 'Ⅱ' : '▶'}
-            </button>
-            <div className="audio-player-main">
-              {resumeAt > 0 && !audio?.completed && position === 0 && (
-                <span className="audio-resume">
-                  이어 듣기 {timeLabel(resumeAt)}
-                </span>
+          {hasRecording ? (
+            <div className="audio-player">
+              {fileReady && (
+                <audio
+                  ref={audioRef}
+                  src={signedUrl}
+                  preload="metadata"
+                  onLoadedMetadata={(event) => {
+                    const mediaDuration = Number.isFinite(
+                      event.currentTarget.duration,
+                    )
+                      ? event.currentTarget.duration
+                      : audio?.duration_sec || 0;
+                    setDuration(mediaDuration);
+                    updateMediaPosition(event.currentTarget);
+                    if (resumeAt > 0) setPosition(resumeAt);
+                  }}
+                  onTimeUpdate={onTimeUpdate}
+                  onPlay={onPlay}
+                  onPause={onPause}
+                  onSeeked={onSeeked}
+                  onEnded={onEnded}
+                  onError={() =>
+                    setMessage(
+                      '오디오 파일을 불러오지 못했어요. 잠시 후 다시 시도해주세요.',
+                    )
+                  }
+                />
               )}
-              <input
-                className="audio-seek"
-                type="range"
-                min="0"
-                max={duration || 1}
-                step="0.1"
-                value={Math.min(position, duration || 0)}
-                onChange={seek}
-                disabled={!fileReady || !duration}
-                aria-label="오디오 재생 위치"
-              />
-              <div className="audio-time">
-                <span>{timeLabel(position)}</span>
-                <span>{timeLabel(duration)}</span>
+              <button
+                className="audio-play-button"
+                type="button"
+                onClick={togglePlayback}
+                disabled={busy || !fileReady}
+                aria-label={playing ? '일시정지' : '재생'}
+              >
+                {busy ? '…' : playing ? 'Ⅱ' : '▶'}
+              </button>
+              <div className="audio-player-main">
+                {resumeAt > 0 && !audio?.completed && position === 0 && (
+                  <span className="audio-resume">
+                    이어 듣기 {timeLabel(resumeAt)}
+                  </span>
+                )}
+                <input
+                  className="audio-seek"
+                  type="range"
+                  min="0"
+                  max={duration || 1}
+                  step="0.1"
+                  value={Math.min(position, duration || 0)}
+                  onChange={seek}
+                  disabled={!fileReady || !duration}
+                  aria-label="오디오 재생 위치"
+                />
+                <div className="audio-time">
+                  <span>{timeLabel(position)}</span>
+                  <span>{timeLabel(duration)}</span>
+                </div>
               </div>
             </div>
-          </div>
-          {!fileReady && (
+          ) : (
             <p className="challenge-audio-note" role="status">
-              {message || '오디오 파일을 준비하고 있어요'}
+              음원 준비 중이에요.
+            </p>
+          )}
+          {hasRecording && !fileReady && (
+            <p className="challenge-audio-note" role="status">
+              {message || '오디오 파일을 불러오는 중이에요.'}
             </p>
           )}
           {message && fileReady && (
