@@ -12,6 +12,9 @@ import AdminPage from '../pages/AdminPage';
 const EMAILRE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const FREE = new Set(['day', 'month', 'guide']);
 const PILOT_MODE = import.meta.env.VITE_PILOT_MODE === 'true';
+const CHALLENGE_PREVIEW =
+  import.meta.env.DEV &&
+  new URLSearchParams(window.location.search).get('challengePreview') === '1';
 
 function dailyMessage(userId) {
   const today = iso(new Date());
@@ -33,16 +36,54 @@ export default function AppShell({
   api,
 }) {
   const today = useMemo(() => new Date(), []);
-  const [tab, setTab] = useState('guide');
+  const [tab, setTab] = useState(CHALLENGE_PREVIEW ? 'day' : 'guide');
   const [isAnon, setIsAnon] = useState(false);
   const [convertOpen, setConvertOpen] = useState(false);
+  const [challengeAccess, setChallengeAccess] = useState(
+    profile.role === 'admin' ? null : undefined,
+  );
   const msg = useMemo(() => dailyMessage(profile.id), [profile.id]);
 
   useEffect(() => {
     store.getUser().then((u) => setIsAnon(!!u && !u.email));
   }, []);
 
+  useEffect(() => {
+    if (profile.role === 'admin') {
+      setChallengeAccess(null);
+      return undefined;
+    }
+    let cancelled = false;
+    setChallengeAccess(undefined);
+    store
+      .getMyChallengeAudios()
+      .then((rows) => {
+        if (cancelled) return;
+        const participant = rows.find(
+          (row) => row.is_participant && !row.viewer_is_admin,
+        );
+        setChallengeAccess(
+          participant
+            ? {
+                endDate: participant.record_end_date,
+                serverDate: participant.server_date,
+              }
+            : null,
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setChallengeAccess(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [profile.id, profile.role]);
+
   const subscribed = !!profile.subscribed;
+  const challengeParticipant = profile.role !== 'admin' && !!challengeAccess;
+  const challengeEnded =
+    challengeParticipant &&
+    challengeAccess.serverDate > challengeAccess.endDate;
   const tabs = [
     { k: 'guide', label: '안내', sub: '쓰는 법' },
     { k: 'day', label: '오늘', sub: '일 · 2분' },
@@ -55,9 +96,46 @@ export default function AppShell({
 
   const isReviewTab = tab === 'week' || tab === 'chart';
   const locked =
+    !challengeParticipant &&
     !FREE.has(tab) &&
     tab !== 'admin' &&
     (PILOT_MODE && isReviewTab ? true : !subscribed);
+
+  if (profile.role !== 'admin' && challengeAccess === undefined) {
+    return (
+      <div className="wrap" style={{ paddingTop: 0 }}>
+        <section className="page on">
+          <div className="card">
+            <p className="muted" style={{ margin: 0 }}>
+              참여 상태를 확인하고 있어요.
+            </p>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  if (challengeEnded) {
+    return (
+      <div className="wrap" style={{ paddingTop: 0 }}>
+        <div className="userbar">
+          <div className="greet">
+            <b>{profile.nickname}</b>님
+          </div>
+          <button className="logoutbtn" onClick={onLogout}>
+            로그아웃
+          </button>
+        </div>
+        <section className="page on">
+          <div className="card locked-page">
+            <div className="eyebrow">2주 실험실 종료</div>
+            <h2 className="serif">참여 기간이 끝났어요</h2>
+            <p className="lead">계속 이용하려면 관리자에게 말하세요.</p>
+          </div>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="wrap" style={{ paddingTop: 0 }}>
@@ -97,7 +175,12 @@ export default function AppShell({
             <span>{t.label}</span>
             <span className="k">
               {t.sub}
-              {!FREE.has(t.k) && t.k !== 'admin' && !subscribed ? ' · 🔒' : ''}
+              {!challengeParticipant &&
+              !FREE.has(t.k) &&
+              t.k !== 'admin' &&
+              !subscribed
+                ? ' · 🔒'
+                : ''}
             </span>
           </button>
         ))}

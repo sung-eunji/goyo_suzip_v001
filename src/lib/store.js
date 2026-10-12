@@ -363,16 +363,14 @@ export async function savePromises(
       .eq('is_active', true);
     if (deactivateError) throw deactivateError;
     if (promises.length) {
-      const { error } = await supabase
-        .from('promises')
-        .insert(
-          promises.map((text, index) => ({
-            user_id: userId,
-            month,
-            text_raw: text,
-            position: index + 1,
-          })),
-        );
+      const { error } = await supabase.from('promises').insert(
+        promises.map((text, index) => ({
+          user_id: userId,
+          month,
+          text_raw: text,
+          position: index + 1,
+        })),
+      );
       if (error) throw error;
     }
   });
@@ -633,6 +631,81 @@ export async function clearMyEntries(userId) {
   await supabase.from('promises').delete().eq('user_id', userId);
   await supabase.from('survey_responses').delete().eq('user_id', userId);
   await saveSettings(userId, [], {});
+}
+
+export const ACTIVE_CHALLENGE_ID =
+  import.meta.env.VITE_CHALLENGE_ID || 'e840ab99-967f-48f4-8a1b-77a6358a64f5';
+
+export async function getMyChallengeAudios(challengeId = ACTIVE_CHALLENGE_ID) {
+  const { data, error } = await supabase.rpc('get_my_challenge_audios', {
+    p_challenge_id: challengeId,
+  });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getChallengeParticipants(
+  challengeId = ACTIVE_CHALLENGE_ID,
+) {
+  const { data, error } = await supabase
+    .from('challenge_participants')
+    .select('user_id,display_name,acquisition_source,joined_at')
+    .eq('challenge_id', challengeId)
+    .order('joined_at');
+  if (error) throw error;
+  return data || [];
+}
+
+export async function addChallengeParticipant({
+  userId,
+  displayName,
+  acquisitionSource,
+  challengeId = ACTIVE_CHALLENGE_ID,
+}) {
+  const { error } = await supabase.from('challenge_participants').insert({
+    challenge_id: challengeId,
+    user_id: userId,
+    display_name: displayName,
+    acquisition_source: acquisitionSource,
+  });
+  if (error) throw error;
+}
+
+export async function removeChallengeParticipant(
+  userId,
+  challengeId = ACTIVE_CHALLENGE_ID,
+) {
+  const { error } = await supabase
+    .from('challenge_participants')
+    .delete()
+    .eq('challenge_id', challengeId)
+    .eq('user_id', userId);
+  if (error) throw error;
+}
+
+export async function createChallengeAudioUrl(storagePath) {
+  const { data, error } = await supabase.storage
+    .from('challenge-audio')
+    .createSignedUrl(storagePath, 60 * 60);
+  if (error) throw error;
+  return data.signedUrl;
+}
+
+export async function recordChallengeAudioEvent({
+  audioId,
+  eventType,
+  positionSec,
+  deltaSeconds,
+  requestId,
+}) {
+  const { error } = await supabase.rpc('upsert_audio_listen', {
+    p_audio_id: audioId,
+    p_event_type: eventType,
+    p_position_sec: positionSec,
+    p_delta_seconds: deltaSeconds,
+    p_request_id: requestId,
+  });
+  if (error) throw error;
 }
 
 /* ---------------- 관리자 (Gee가 참가자 전체 열람) ---------------- */

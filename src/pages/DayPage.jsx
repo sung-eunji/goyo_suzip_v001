@@ -1,12 +1,42 @@
 import { useEffect, useState } from 'react';
 import { iso, DOW, BODY, MET_FEEL, NEEDS, SOLUTION_SCORES } from '../lib/data';
 import WaveGauge from '../components/WaveGauge';
+import ChallengeAudioCard from '../components/ChallengeAudioCard';
 
 const dotClass = { tense: 'd-tense', flow: 'd-flow', ease: 'd-ease' };
 const colClass = { tense: 'col-tense', flow: 'col-flow', ease: 'col-ease' };
+const DEV_DATE = import.meta.env.DEV
+  ? new URLSearchParams(window.location.search).get('challengeDate')
+  : null;
+const DEV_CHALLENGE_PREVIEW =
+  import.meta.env.DEV &&
+  new URLSearchParams(window.location.search).get('challengePreview') === '1';
+const VALID_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const OCTOBER_START = '2026-10-01';
+const OCTOBER_END = '2026-10-31';
+const INITIAL_CHALLENGE_DATE =
+  DEV_DATE && VALID_DATE.test(DEV_DATE)
+    ? DEV_DATE
+    : DEV_CHALLENGE_PREVIEW
+      ? '2026-10-13'
+      : null;
+
+function octoberDate(dateKey) {
+  const boundedDate =
+    dateKey < OCTOBER_START
+      ? OCTOBER_START
+      : dateKey > OCTOBER_END
+        ? OCTOBER_END
+        : dateKey;
+  return new Date(`${boundedDate}T12:00:00`);
+}
 
 export default function DayPage({ journal, api, today }) {
-  const [curDay, setCurDay] = useState(() => new Date(today));
+  const [curDay, setCurDay] = useState(() =>
+    INITIAL_CHALLENGE_DATE
+      ? new Date(`${INITIAL_CHALLENGE_DATE}T12:00:00`)
+      : octoberDate(iso(today)),
+  );
   const key = iso(curDay);
   const entry = journal.entries[key];
 
@@ -22,6 +52,7 @@ export default function DayPage({ journal, api, today }) {
   const [solutionScore, setSolutionScore] = useState('');
   const [none, setNone] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [challengeWindow, setChallengeWindow] = useState(undefined);
 
   useEffect(() => {
     const e = journal.entries[key] || {
@@ -49,20 +80,29 @@ export default function DayPage({ journal, api, today }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, entry]);
 
-  const isToday = iso(curDay) === iso(today);
-  const startOfDay = (d) => {
-    const x = new Date(d);
-    x.setHours(0, 0, 0, 0);
-    return x;
-  };
+  const currentDateKey = challengeWindow?.serverDate || iso(today);
+  const todayInChallengeMonth = octoberDate(currentDateKey);
+  const todayKey = iso(todayInChallengeMonth);
+  const isToday = key === todayKey;
   const daysAgo = Math.round(
-    (startOfDay(today) - startOfDay(curDay)) / 86400000,
+    (Date.parse(`${currentDateKey}T00:00:00Z`) -
+      Date.parse(`${key}T00:00:00Z`)) /
+      86400000,
   );
   // 3일이 지나면 더 이상 손댈 수 없어요 — 늦게 채운 기록이 이탈·급증일 분석을 왜곡하지 않도록.
-  const editable = daysAgo <= 3;
+  const challengeDateInWindow =
+    challengeWindow !== undefined &&
+    (!challengeWindow ||
+      (key >= challengeWindow.startDate && key <= challengeWindow.endDate));
+  const challengeDateAllowed =
+    challengeDateInWindow &&
+    (!challengeWindow || key <= challengeWindow.serverDate);
+  const editable = daysAgo >= 0 && daysAgo <= 3 && challengeDateAllowed;
   const shift = (n) => {
     const d = new Date(curDay);
     d.setDate(d.getDate() + n);
+    const nextKey = iso(d);
+    if (nextKey < OCTOBER_START || nextKey > OCTOBER_END) return;
     setCurDay(d);
   };
   const toggle = (arr, set, v) =>
@@ -95,7 +135,12 @@ export default function DayPage({ journal, api, today }) {
   return (
     <section className="page on">
       <div className="datebar">
-        <button className="nav" onClick={() => shift(-1)} aria-label="이전 날">
+        <button
+          className="nav"
+          onClick={() => shift(-1)}
+          disabled={key <= OCTOBER_START}
+          aria-label="이전 날"
+        >
           ‹
         </button>
         <span className="dlabel">
@@ -105,19 +150,50 @@ export default function DayPage({ journal, api, today }) {
         <button
           className="nav"
           onClick={() => shift(1)}
-          disabled={isToday}
+          disabled={key >= OCTOBER_END}
           aria-label="다음 날"
         >
           ›
         </button>
         {!isToday && (
-          <button className="today" onClick={() => setCurDay(new Date(today))}>
+          <button
+            className="today"
+            onClick={() => setCurDay(todayInChallengeMonth)}
+          >
             오늘로
           </button>
         )}
       </div>
 
-      {!editable && (
+      <ChallengeAudioCard
+        dateKey={key}
+        onChallengeWindow={setChallengeWindow}
+      />
+
+      {challengeWindow === undefined ? (
+        <div className="card" style={{ marginBottom: 14 }}>
+          <p className="muted" style={{ margin: 0 }}>
+            기록 가능한 날짜를 확인하고 있어요.
+          </p>
+        </div>
+      ) : challengeWindow && !challengeDateInWindow ? (
+        <div className="card" style={{ marginBottom: 14 }}>
+          <p className="muted" style={{ margin: 0 }}>
+            챌린지 기록은 {Number(challengeWindow.startDate.slice(5, 7))}월{' '}
+            {Number(challengeWindow.startDate.slice(8, 10))}일부터{' '}
+            {Number(challengeWindow.endDate.slice(5, 7))}월{' '}
+            {Number(challengeWindow.endDate.slice(8, 10))}일까지 입력할 수
+            있어요.
+          </p>
+        </div>
+      ) : daysAgo < 0 ? (
+        <div className="card" style={{ marginBottom: 14 }}>
+          <p className="muted" style={{ margin: 0 }}>
+            {Number(key.slice(5, 7))}월 {Number(key.slice(8, 10))}일이 되면
+            기록할 수 있어요.
+          </p>
+        </div>
+      ) : !editable ? (
         <div className="card" style={{ marginBottom: 14 }}>
           <p className="muted" style={{ margin: 0 }}>
             3일이 지난 날은 더 이상 기록할 수 없어요. 이 날은 "기록 없음"으로
@@ -125,7 +201,7 @@ export default function DayPage({ journal, api, today }) {
             규칙이에요.
           </p>
         </div>
-      )}
+      ) : null}
 
       <div
         className="card"

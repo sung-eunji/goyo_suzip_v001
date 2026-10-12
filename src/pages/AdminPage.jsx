@@ -60,6 +60,13 @@ export default function AdminPage() {
   const [selectedUser, setSelectedUser] = useState('all');
   const [error, setError] = useState('');
   const [exportNotice, setExportNotice] = useState('');
+  const [challengeParticipants, setChallengeParticipants] = useState([]);
+  const [challengeParticipantsLoaded, setChallengeParticipantsLoaded] =
+    useState(false);
+  const [challengeSource, setChallengeSource] = useState('instagram');
+  const [challengeParticipantError, setChallengeParticipantError] =
+    useState('');
+  const [savingChallengeUserId, setSavingChallengeUserId] = useState('');
 
   useEffect(() => {
     store
@@ -68,6 +75,21 @@ export default function AdminPage() {
       .catch((reason) =>
         setError(reason.message || '관리자 데이터를 불러오지 못했어요.'),
       );
+  }, []);
+
+  useEffect(() => {
+    store
+      .getChallengeParticipants()
+      .then((rows) => {
+        setChallengeParticipants(rows);
+        setChallengeParticipantsLoaded(true);
+      })
+      .catch((reason) => {
+        setChallengeParticipantError(
+          reason.message || '챌린지 참여자를 불러오지 못했어요.',
+        );
+        setChallengeParticipantsLoaded(true);
+      });
   }, []);
 
   const analysis = useMemo(() => {
@@ -181,6 +203,41 @@ export default function AdminPage() {
       ? analysis.entries
       : analysis.entries.filter((entry) => entry.user_id === selectedUser);
   }, [analysis, selectedUser]);
+  const challengeParticipantsByUser = Object.fromEntries(
+    challengeParticipants.map((participant) => [
+      participant.user_id,
+      participant,
+    ]),
+  );
+
+  async function toggleChallengeParticipant(profile) {
+    const participant = challengeParticipants.find(
+      (item) => item.user_id === profile.id,
+    );
+    setSavingChallengeUserId(profile.id);
+    setChallengeParticipantError('');
+    try {
+      if (participant) {
+        await store.removeChallengeParticipant(profile.id);
+        setChallengeParticipants((current) =>
+          current.filter((item) => item.user_id !== profile.id),
+        );
+      } else {
+        await store.addChallengeParticipant({
+          userId: profile.id,
+          displayName: profile.nickname,
+          acquisitionSource: challengeSource,
+        });
+        setChallengeParticipants(await store.getChallengeParticipants());
+      }
+    } catch (reason) {
+      setChallengeParticipantError(
+        reason.message || '챌린지 참여 상태를 저장하지 못했어요.',
+      );
+    } finally {
+      setSavingChallengeUserId('');
+    }
+  }
 
   function exportCsv() {
     if (!analysis) return;
@@ -527,12 +584,37 @@ export default function AdminPage() {
       </section>
 
       <section className="admin-analysis-section">
-        <h3>동의·참여 상태</h3>
+        <div className="admin-detail-header">
+          <div>
+            <h3>동의·챌린지 참여 상태</h3>
+            <p className="muted">챌린지 참가 여부와 모집 경로를 관리합니다.</p>
+          </div>
+          <label className="challenge-source-control">
+            <span>새 참가자 유입 경로</span>
+            <select
+              aria-label="새 참가자 유입 경로"
+              value={challengeSource}
+              onChange={(event) => setChallengeSource(event.target.value)}
+            >
+              <option value="instagram">Instagram</option>
+              <option value="linkedin">LinkedIn</option>
+              <option value="referral">추천</option>
+              <option value="other">기타</option>
+            </select>
+          </label>
+        </div>
+        {challengeParticipantError && (
+          <p className="autherr" role="alert">
+            {challengeParticipantError}
+          </p>
+        )}
         <div className="admin-table-scroll">
           <table className="dtable">
             <thead>
               <tr>
                 <th>닉네임</th>
+                <th>챌린지</th>
+                <th>유입 경로</th>
                 <th>코호트</th>
                 <th>가입</th>
                 <th>연구 동의</th>
@@ -544,6 +626,37 @@ export default function AdminPage() {
                 <tr key={profile.id}>
                   <td>
                     <b>{profile.nickname}</b>
+                  </td>
+                  <td>
+                    <button
+                      className="btn ghost"
+                      type="button"
+                      aria-pressed={!!challengeParticipantsByUser[profile.id]}
+                      disabled={
+                        !challengeParticipantsLoaded ||
+                        savingChallengeUserId === profile.id
+                      }
+                      onClick={() => toggleChallengeParticipant(profile)}
+                    >
+                      {savingChallengeUserId === profile.id
+                        ? '저장 중…'
+                        : !challengeParticipantsLoaded
+                          ? '불러오는 중…'
+                          : challengeParticipantsByUser[profile.id]
+                            ? '참여 중'
+                            : '미참여'}
+                    </button>
+                  </td>
+                  <td>
+                    {{
+                      instagram: 'Instagram',
+                      linkedin: 'LinkedIn',
+                      referral: '추천',
+                      other: '기타',
+                    }[
+                      challengeParticipantsByUser[profile.id]
+                        ?.acquisition_source
+                    ] || '—'}
                   </td>
                   <td>{profile.cohort || '—'}</td>
                   <td>{profile.created_at.slice(0, 10)}</td>

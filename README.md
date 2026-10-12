@@ -44,6 +44,33 @@ npm run build:pilot
 
 배포 서비스에서 `develop` 브랜치의 build command는 `npm run build:pilot`, 구매 체험용 `main` 브랜치는 `npm run build`로 설정하세요. `develop`은 `.env.pilot`의 `VITE_PILOT_MODE=true`로 주/흐름을 잠급니다. 같은 Supabase DB를 사용해도 pilot build에서는 구독 상태와 관계없이 잠깁니다.
 
+### 2주 챌린지 오디오 가이드
+
+기본 스키마를 적용한 뒤 Supabase **SQL Editor**에서 `supabase/migrations/20261005000002_challenge_audio_guide.sql`을 실행합니다. 이 마이그레이션은 기존 테이블을 변경하지 않고 챌린지 기수, 참가자, 오디오와 청취 데이터를 추가합니다. 기본 기수는 2026-10-13 시작, 14일, Slack 진행, 한국어이며 모집 경로는 참가자별로 기록합니다. 다음 기수를 앱에서 다룰 때는 그 기수의 UUID를 `VITE_CHALLENGE_ID` 환경변수로 지정합니다.
+
+관리자 탭의 **동의·챌린지 참여 상태** 표에서 참가자를 등록할 때 유입 경로를 선택합니다. 이 첫 기수의 모집은 Instagram으로, 진행 공간은 Slack으로 기록하면 됩니다. 참여자 행에는 표시명과 모집 출처가 저장되고, 유저 프로필에는 단일 참여 여부를 넣지 않습니다.
+
+오디오 파일을 업로드할 때는 Supabase **Storage → `challenge-audio`** 비공개 버킷 안에 다음 폴더를 만들고 `day1.mp3`부터 `day14.mp3`까지 업로드합니다.
+
+```text
+goyo-stillness-2week-20261013/day1.mp3
+...
+goyo-stillness-2week-20261013/day14.mp3
+```
+
+각 MP3 파일을 올린 뒤 `challenge_audios` 테이블에서 제목, 부위, 짧은 설명, `duration_sec`를 입력합니다. 데모 M4A도 시험할 수 있도록 버킷은 `audio/mp4`와 `audio/x-m4a`도 허용합니다. macOS에서는 `afinfo day1.mp3` 또는 `afinfo "day1 demo.m4a"`로 파일 길이를 확인할 수 있습니다. 길이 초 단위는 아래처럼 저장합니다.
+
+```sql
+update public.challenge_audios
+set title = '제목', body_part = '어깨', description = '짧은 안내', duration_sec = 95
+where challenge_id = (select id from public.challenges where slug = 'goyo-stillness-2week-20261013')
+  and day_number = 1;
+```
+
+파일이 아직 업로드되지 않아도 참가자 화면의 가이드 카드는 유지되고 재생만 준비 안내 상태로 표시됩니다. 재생 URL은 열린 날짜에 한해 1시간 signed URL로 생성됩니다. 누적 청취 시간은 재생·일시정지·탐색·종료 때 전송하며, 완료는 종료 이벤트와 길이의 80% 이상 청취를 서버가 함께 확인합니다.
+
+Vite 개발 중에는 `http://localhost:5173/?challengeDate=2026-10-15`처럼 `challengeDate`로 오늘 탭의 선택 날짜를 바꿔 시작 전/과거/미래 UI를 확인할 수 있습니다. 이 값은 화면 날짜만 바꾸며 서버의 Day 계산이나 잠금을 우회하지 않습니다. DB 연결 없이 플레이어 모양만 보려면 `http://localhost:5173/?challengePreview=1`을 사용하세요. 이는 재생되지 않는 Day 1 시각 미리보기이며 개발 모드에서만 동작합니다. Day 1 실제 재생 상태는 별도 개발 Supabase DB에서 기수 `start_date`를 한국 날짜 오늘로 설정하고 해당 파일을 업로드한 뒤 확인하세요. 실제 DB 날짜를 바꿔 테스트하지 마세요.
+
 ### 이메일 확인·비밀번호 재설정 URL
 
 Supabase 대시보드의 **Authentication → URL Configuration**에서 다음을 설정합니다.

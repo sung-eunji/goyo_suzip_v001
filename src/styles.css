@@ -1846,3 +1846,141 @@ table.dtable td {
     margin: 4px 0 0;
   }
 }
+
+.challenge-audio-card {
+  margin-bottom: 14px;
+  padding: 15px 18px;
+  color: #edf4ef;
+  background: #173b40;
+  border-color: #245158;
+  box-shadow: none;
+}
+.challenge-audio-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #e3eeea;
+  font-size: 12px;
+  font-weight: 650;
+}
+.challenge-audio-note {
+  margin: 4px 0 0;
+  color: #b8ceca;
+  font-size: 13px;
+}
+.challenge-audio-locked {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.challenge-audio-lock {
+  color: #c4d8d1;
+  font-size: 16px;
+}
+.challenge-audio-meta {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: 5px;
+  color: #c8dad5;
+  font-size: 12px;
+}
+.challenge-audio-meta strong {
+  color: #f0f5f0;
+  font-weight: 600;
+}
+.challenge-audio-meta p {
+  flex-basis: 100%;
+  margin: 0;
+}
+.challenge-audio-complete {
+  color: #b4d8ca;
+  font-size: 11px;
+  font-weight: 500;
+}
+.audio-player {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  margin-top: 9px;
+}
+.audio-player audio {
+  display: none;
+}
+.audio-play-button {
+  display: grid;
+  place-items: center;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid #759693;
+  border-radius: 50%;
+  color: #f3f7f2;
+  background: #275158;
+  font-size: 14px;
+}
+.audio-play-button:disabled {
+  opacity: 0.65;
+}
+.audio-player-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.audio-resume {
+  display: block;
+  margin-bottom: 2px;
+  color: #c5d9d1;
+  font-size: 11px;
+}
+.audio-seek {
+  display: block;
+  width: 100%;
+  height: 16px;
+  margin: 0;
+  accent-color: #a5cec0;
+  cursor: pointer;
+}
+.audio-time {
+  display: flex;
+  justify-content: space-between;
+  color: #c2d1cc;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.challenge-audio-error {
+  margin: 5px 0 0;
+  color: #f0c5ad;
+  font-size: 11px;
+}
+.challenge-source-control {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.challenge-source-control select {
+  min-width: 125px;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  color: var(--ink);
+  background: var(--surface);
+}
+@media (max-width: 390px) {
+  .challenge-audio-card {
+    padding: 13px 14px;
+  }
+  .audio-player {
+    gap: 9px;
+  }
+  .challenge-source-control {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
