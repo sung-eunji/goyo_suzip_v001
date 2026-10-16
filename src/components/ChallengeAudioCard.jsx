@@ -4,6 +4,7 @@ import * as store from '../lib/store';
 const PREVIEW_MODE =
   import.meta.env.DEV &&
   new URLSearchParams(window.location.search).get('challengePreview') === '1';
+const PLAYBACK_GAIN = 15;
 
 function addDays(dateKey, count) {
   const date = new Date(`${dateKey}T00:00:00Z`);
@@ -65,6 +66,8 @@ export default function ChallengeAudioCard({ dateKey, onChallengeWindow }) {
   const [duration, setDuration] = useState(0);
   const [message, setMessage] = useState('');
   const audioRef = useRef(null);
+  const audioContextRef = useRef(null);
+  const audioSourceRef = useRef(null);
   const lastMediaPosition = useRef(0);
   const lastTickAt = useRef(0);
   const pendingSeconds = useRef(0);
@@ -203,7 +206,13 @@ export default function ChallengeAudioCard({ dateKey, onChallengeWindow }) {
     session.playbackState = audioRef.current?.paused ? 'paused' : 'playing';
 
     const actions = {
-      play: () => audioRef.current?.play().catch(() => {}),
+      play: () => {
+        const media = audioRef.current;
+        if (!media) return;
+        prepareAmplifiedPlayback(media)
+          .then(() => media.play())
+          .catch(() => {});
+      },
       pause: () => audioRef.current?.pause(),
       stop: () => {
         if (!audioRef.current) return;
@@ -317,7 +326,8 @@ export default function ChallengeAudioCard({ dateKey, onChallengeWindow }) {
     lastTickAt.current = performance.now();
     playingRef.current = true;
     setPlaying(true);
-    if (navigator.mediaSession) navigator.mediaSession.playbackState = 'playing';
+    if (navigator.mediaSession)
+      navigator.mediaSession.playbackState = 'playing';
     setMessage('');
     sendEvent('play', 0, media?.currentTime || 0);
   }
@@ -391,6 +401,7 @@ export default function ChallengeAudioCard({ dateKey, onChallengeWindow }) {
     }
     setBusy(true);
     try {
+      await prepareAmplifiedPlayback(media);
       await media.play();
     } catch {
       setMessage('오디오를 재생할 수 없어요. 잠시 후 다시 시도해주세요.');
@@ -405,6 +416,29 @@ export default function ChallengeAudioCard({ dateKey, onChallengeWindow }) {
     const nextPosition = Number(event.target.value);
     media.currentTime = nextPosition;
     setPosition(nextPosition);
+  }
+
+  async function prepareAmplifiedPlayback(media) {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+
+    try {
+      const audioContext =
+        audioContextRef.current ||
+        (audioContextRef.current = new AudioContextClass());
+      if (audioSourceRef.current?.media !== media) {
+        audioSourceRef.current?.source.disconnect();
+        const source = audioContext.createMediaElementSource(media);
+        const gain = audioContext.createGain();
+        gain.gain.value = PLAYBACK_GAIN;
+        source.connect(gain);
+        gain.connect(audioContext.destination);
+        audioSourceRef.current = { media, source };
+      }
+      if (audioContext.state === 'suspended') await audioContext.resume();
+    } catch {
+      // Keep normal playback available if Web Audio amplification is unavailable.
+    }
   }
 
   if (!guide) return null;
@@ -492,6 +526,7 @@ export default function ChallengeAudioCard({ dateKey, onChallengeWindow }) {
                 <audio
                   ref={audioRef}
                   src={signedUrl}
+                  crossOrigin="anonymous"
                   preload="metadata"
                   onLoadedMetadata={(event) => {
                     const mediaDuration = Number.isFinite(
